@@ -2,7 +2,7 @@
 Grafo principal para el sistema de conversación del chatbot.
 """
 from typing import Dict, Any, List, TypedDict, Optional
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from langchain_core.messages import BaseMessage
 from langgraph.graph import StateGraph
 from src.graphs.handlers import (
     detect_intents,
@@ -15,7 +15,6 @@ from src.graphs.handlers import (
     finalize_response
 )
 from src.graphs.routers import route_main_conversation
-from src.graphs.troubleshooting import create_troubleshooting_graph
 
 # Definir el tipo del estado
 

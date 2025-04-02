@@ -12,7 +12,7 @@ Las posibles intenciones son:
 - horario: Si pregunta por los horarios de atención
 - email: Si solicita un correo electrónico de contacto
 - telefono: Si pide un número de teléfono para llamar
-- security: Si quiere contactar con el servicio de seguridad (Security 24)
+- security: Si quiere contactar con el servicio de monitoreo (nombre empresa: Security 24)
 - whatsapp: Si pide un número de WhatsApp general
 - whatsapp_servicio_tecnico: Si quiere contactar al servicio técnico
 - whatsapp_ventas: Si quiere contactar con ventas
@@ -30,11 +30,11 @@ Devuelve solo las intenciones detectadas, separadas por comas. Si no detectas ni
 
 # Template para respuestas generales
 GENERAL_RESPONSE_TEMPLATE = """
-Eres el asistente virtual de Taborra Alarmas, una empresa de seguridad electronica y camaras de seguridad.
+Eres el asistente virtual de Taborra Alarmas SRL, una empresa de seguridad electronica y camaras de seguridad.
 
 Nivel de acceso del usuario: {user_level} 
-- Nivel 1: Público general (solo información básica)
-- Nivel 2: Clientes (información + resolución de problemas)
+- Nivel 1: Público general (solo información basica)
+- Nivel 2: Clientes (información basica + resolución de problemas)
 - Nivel 3: VIP (todo lo anterior + consulta de estado real)
 
 Intenciones detectadas: {intents}
@@ -43,7 +43,7 @@ Información del negocio:
 - Dirección: {direccion}
 - Horario: {horario}
 - Email: {email}
-- Teléfono: {telefono}
+- Teléfonos: {telefono1} {telefono2} {telefono3}
 - WhatsApp: {whatsapp}
 - WhatsApp Servicio Técnico: {whatsapp_servicio_tecnico}
 - WhatsApp Ventas: {whatsapp_ventas}
@@ -54,18 +54,12 @@ Información del negocio:
 Contexto: {context}
 
 Responde de manera amigable y profesional. Usa emojis ocasionalmente.
-Sé conciso pero completo en tu respuesta.
+Sé conciso pero completo en tu respuesta. La respuesta no debe ser mas de 2 renglones.
 
 Mensaje del usuario: {user_message}
 
 Tu respuesta:
 """
-
-# Crear los templates con ChatPromptTemplate
-intent_classifier_prompt = ChatPromptTemplate.from_template(
-    INTENT_CLASSIFIER_TEMPLATE)
-general_response_prompt = ChatPromptTemplate.from_template(
-    GENERAL_RESPONSE_TEMPLATE)
 
 # Templates adicionales para diferentes casos
 ALARM_STATUS_TEMPLATE = """
@@ -86,5 +80,9 @@ Usa emojis relevantes y formato para facilitar la lectura.
 """
 
 # Crear los templates adicionales
+intent_classifier_prompt = ChatPromptTemplate.from_template(
+    INTENT_CLASSIFIER_TEMPLATE)
+general_response_prompt = ChatPromptTemplate.from_template(
+    GENERAL_RESPONSE_TEMPLATE)
 alarm_status_prompt = ChatPromptTemplate.from_template(ALARM_STATUS_TEMPLATE)
 camera_scan_prompt = ChatPromptTemplate.from_template(CAMERA_SCAN_TEMPLATE)
