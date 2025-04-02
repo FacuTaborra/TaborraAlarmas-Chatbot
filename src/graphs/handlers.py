@@ -39,7 +39,7 @@ def handle_general_inquiry(state: Dict[str, Any]) -> Dict[str, Any]:
 
     # Intenciones específicas para información de negocio
     specific_intents = [
-        "saludo", "despedida", "direccion", "horario", "email", "telefono",
+        "saludo", "despedida", "direccion", "horario", "email", "telefono1", "telefono2", "telefono3"
         "whatsapp", "whatsapp_servicio_tecnico", "whatsapp_ventas",
         "whatsapp_administracion", "whatsapp_cobranza", "security", "control_alarma"
     ]
@@ -217,7 +217,7 @@ def process_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def handle_llm_response(state: Dict[str, Any]) -> Dict[str, Any]:
+def handle_general_response(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Nodo para responder cuando no se detectan intenciones
 

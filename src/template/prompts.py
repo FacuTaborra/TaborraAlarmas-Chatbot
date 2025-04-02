@@ -11,7 +11,7 @@ Las posibles intenciones son:
 - direccion: Si pregunta dónde está ubicada la empresa o cómo llegar
 - horario: Si pregunta por los horarios de atención
 - email: Si solicita un correo electrónico de contacto
-- telefono: Si pide un número de teléfono para llamar
+- telefono[1,2,3]: Si pide un número de teléfono para llamar, devolve los 3 telefonos siempre
 - security: Si quiere contactar con el servicio de monitoreo (nombre empresa: Security 24)
 - whatsapp: Si pide un número de WhatsApp general
 - whatsapp_servicio_tecnico: Si quiere contactar al servicio técnico

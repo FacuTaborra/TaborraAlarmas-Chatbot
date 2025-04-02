@@ -1,7 +1,7 @@
 """
 Funciones de enrutamiento para los grafos de conversación.
 """
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 
 def route_main_conversation(state: Dict[str, Any]) -> str:
@@ -44,7 +44,7 @@ def route_main_conversation(state: Dict[str, Any]) -> str:
         return "GENERAL_INQUIRY"
 
     # Intenciones generales de información para cualquier nivel
-    general_intents = ["direccion", "horario", "email", "telefono", "whatsapp",
+    general_intents = ["direccion", "horario", "email", "telefono1", "telefono2", "telefono3", "whatsapp",
                        "whatsapp_servicio_tecnico", "whatsapp_ventas",
                        "whatsapp_administracion", "whatsapp_cobranza",
                        "security", "saludo", "despedida", "control_alarma"]
@@ -52,8 +52,8 @@ def route_main_conversation(state: Dict[str, Any]) -> str:
     if any(intent in intents for intent in general_intents):
         return "GENERAL_INQUIRY"
 
-    # Default: usar LLM para respuesta genérica
-    return "LLM_RESPONSE"
+    # Default: manejo cuando no se detecta intencion
+    return "GENERAL_RESPONSE"
 
 
 def route_troubleshooting(state: Dict[str, Any]) -> str:

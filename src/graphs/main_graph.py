@@ -11,7 +11,7 @@ from src.graphs.handlers import (
     handle_camera_scan,
     start_troubleshooting,
     process_troubleshooting,
-    handle_llm_response,
+    handle_general_response,
     finalize_response
 )
 from src.graphs.routers import route_main_conversation
@@ -47,7 +47,7 @@ def create_conversation_graph():
     conversation_graph.add_node("CAMERA_SCAN", handle_camera_scan)
     conversation_graph.add_node("START_TROUBLESHOOTING", start_troubleshooting)
     conversation_graph.add_node("TROUBLESHOOTING", process_troubleshooting)
-    conversation_graph.add_node("LLM_RESPONSE", handle_llm_response)
+    conversation_graph.add_node("GENERAL_RESPONSE", handle_general_response)
     conversation_graph.add_node("FINAL", finalize_response)
 
     # Añadir enrutamiento condicional desde DETECT_INTENTS
@@ -60,7 +60,7 @@ def create_conversation_graph():
             "CAMERA_SCAN": "CAMERA_SCAN",
             "START_TROUBLESHOOTING": "START_TROUBLESHOOTING",
             "TROUBLESHOOTING": "TROUBLESHOOTING",
-            "LLM_RESPONSE": "LLM_RESPONSE"
+            "GENERAL_RESPONSE": "GENERAL_RESPONSE"
         }
     )
 
@@ -72,7 +72,7 @@ def create_conversation_graph():
     conversation_graph.add_edge("ALARM_STATUS", "FINAL")
     conversation_graph.add_edge("CAMERA_SCAN", "FINAL")
     conversation_graph.add_edge("TROUBLESHOOTING", "FINAL")
-    conversation_graph.add_edge("LLM_RESPONSE", "FINAL")
+    conversation_graph.add_edge("GENERAL_RESPONSE", "FINAL")
 
     # Definir punto de entrada y salida
     conversation_graph.set_entry_point("DETECT_INTENTS")
