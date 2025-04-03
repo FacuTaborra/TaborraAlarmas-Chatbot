@@ -26,22 +26,26 @@ def route_main_conversation(state: Dict[str, Any]) -> str:
     if "problema_alarma" in intents and user_level >= 2:
         return "START_TROUBLESHOOTING"
     elif "problema_alarma" in intents:
-        # Si no tiene nivel 3, podría redirigir a una respuesta general
-        return "GENERAL_INQUIRY"
+        # Si no tiene nivel 2+, podría redirigir a una respuesta general
+        return "ACCESS_DENIED"
 
     # Estado de alarma para nivel 3
     if "estado_alarma" in intents and user_level >= 3:
         return "ALARM_STATUS"
     elif "estado_alarma" in intents:
         # Si no tiene nivel 3, podría redirigir a una respuesta general
-        return "GENERAL_INQUIRY"
+        return "ACCESS_DENIED"
 
     # Escaneo de cámaras para nivel 3
     if "escaneo_camaras" in intents and user_level >= 3:
         return "CAMERA_SCAN"
     elif "escaneo_camaras" in intents:
         # Si no tiene nivel 3, podría redirigir a una respuesta general
-        return "GENERAL_INQUIRY"
+        return "ACCESS_DENIED"
+
+    # Control de alarma, no permitido para ningun nivel
+    if "control_alarma" in intents:
+        return "ACCESS_DENIED"
 
     # Intenciones generales de información para cualquier nivel
     general_intents = ["direccion", "horario", "email", "telefono1", "telefono2", "telefono3", "whatsapp",

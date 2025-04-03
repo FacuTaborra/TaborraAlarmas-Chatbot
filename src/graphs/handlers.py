@@ -25,74 +25,40 @@ def detect_intents(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def handle_general_inquiry(state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Nodo para manejar consultas generales (nivel 1)
-    Args:
-        state: Estado actual de la conversación
-    Returns:
-        Estado con la respuesta generada
-    """
     messages = state["messages"]
-    user_level = state["user_level"]
     intents = state["intents"]
     business_info = state["business_info"]
 
-    # Intenciones específicas para información de negocio
-    specific_intents = [
-        "saludo", "despedida", "direccion", "horario", "email", "telefono1", "telefono2", "telefono3"
-        "whatsapp", "whatsapp_servicio_tecnico", "whatsapp_ventas",
-        "whatsapp_administracion", "whatsapp_cobranza", "security", "control_alarma"
-    ]
+    # Mapeo de intenciones a respuestas predefinidas
+    intent_responses = {
+        "direccion": f"🏢 Nuestra dirección es: {business_info.get('direccion', 'No disponible')}",
+        "horario": f"🕒 Nuestro horario de atención es: {business_info.get('horario', 'No disponible')}",
+        "email": f"📧 Puedes contactarnos por email a: {business_info.get('email', 'No disponible')}",
+        "telefono1": f"📞 Nuestro teléfono principal es: {business_info.get('telefono_1', 'No disponible')}",
+        "telefono2": f"📞 Teléfono alternativo: {business_info.get('telefono_2', 'No disponible')}",
+        "telefono3": f"📞 Otro teléfono: {business_info.get('telefono_3', 'No disponible')}",
+        "whatsapp_servicio_tecnico": f"🔧 WhatsApp del servicio técnico: {business_info.get('whatsapp_servicio_tecnico', 'No disponible')}",
+        "whatsapp_ventas": f"📞 WhatsApp de ventas: {business_info.get('whatsapp_ventas', 'No disponible')}",
+        "whatsapp_administracion": f"📞 WhatsApp de administración: {business_info.get('whatsapp_administracion', 'No disponible')}",
+        "whatsapp_cobranza": f"📞 WhatsApp de cobranza: {business_info.get('whatsapp_cobranza', 'No disponible')}",
+        "security": f"🚨 Teléfono de Security 24: {business_info.get('security', 'No disponible')}",
+        "saludo": "👋 ¡Hola! Soy el asistente virtual de Taborra Alarmas SRL. ¿En qué puedo ayudarte hoy?",
+        "despedida": "👋 ¡Gracias por contactar a Taborra Alarmas SRL! Estamos para ayudarte cuando lo necesites."
+    }
 
-    # Verificar si hay intenciones específicas
-    if any(i in intents for i in specific_intents) or not intents:
-        # Crear un template para el prompt
-        prompt_template = prompts.GENERAL_RESPONSE_TEMPLATE
+    # Si hay una intención específica detectada, usar respuesta predefinida
+    detected_intents = [i for i in intents if i in intent_responses]
 
-        # Crear el prompt
-        prompt = ChatPromptTemplate.from_template(prompt_template)
+    if detected_intents:
+        # Si hay múltiples intenciones, combinar las respuestas
+        if len(detected_intents) > 1:
+            response = "\n\n".join([intent_responses[intent]
+                                   for intent in detected_intents])
+        else:
+            response = intent_responses[detected_intents[0]]
 
-        # Crear LLM
-        llm = ChatOpenAI(
-            model=settings.MODEL_NAME,
-            temperature=0.7,
-            openai_api_key=settings.OPENAI_API_KEY
-        )
-
-        # Crear la cadena
-        chain = prompt | llm
-
-        # Obtener último mensaje del usuario
-        user_message = messages[-1].content if messages and hasattr(
-            messages[-1], "content") else ""
-
-        # Ejecutar la cadena
-        response = chain.invoke({
-            "user_level": user_level,
-            "intents": ", ".join(intents) if intents else "Ninguna",
-            "user_message": user_message,
-            "context": "Consulta sin intención específica",
-            "direccion": business_info.get("direccion", "No disponible"),
-            "horario": business_info.get("horario", "No disponible"),
-            "email": business_info.get("email", "No disponible"),
-            "telefono1": business_info.get("telefono1", "No disponible"),
-            "telefono2": business_info.get("telefono2", "No disponible"),
-            "telefono3": business_info.get("telefono3", "No disponible"),
-            "whatsapp": business_info.get("whatsapp", "No disponible"),
-            "whatsapp_servicio_tecnico": business_info.get("whatsapp_servicio_tecnico", "No disponible"),
-            "whatsapp_ventas": business_info.get("whatsapp_ventas", "No disponible"),
-            "whatsapp_administracion": business_info.get("whatsapp_administracion", "No disponible"),
-            "whatsapp_cobranza": business_info.get("whatsapp_cobranza", "No disponible"),
-            "telefono_security": business_info.get("telefono_security", "No disponible")
-        }).content
-        print(response)
-    else:
-        # Si no hay intenciones específicas, mantener lógica anterior
-        response = "No he podido entender tu consulta. ¿Puedes especificar qué información necesitas sobre nuestros servicios?"
-
-    # Añadir respuesta al historial
-    messages.append(AIMessage(content=response))
-    return {**state, "messages": messages}
+        messages.append(AIMessage(content=response))
+        return {**state, "messages": messages}
 
 
 def handle_alarm_status(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -230,6 +196,45 @@ def handle_general_response(state: Dict[str, Any]) -> Dict[str, Any]:
     messages = state["messages"]
     # Ejecutar la cadena
     response = "No he podido entender tu consulta. ¿Puedes especificar qué información necesitas sobre nuestros servicios?"
+
+    # Añadir respuesta al historial
+    messages.append(AIMessage(content=response))
+
+    return {**state, "messages": messages}
+
+
+def handle_access_denied(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Nodo para manejar solicitudes de acceso denegado por nivel insuficiente
+
+    Args:
+        state: Estado actual de la conversación
+
+    Returns:
+        Estado con mensaje de acceso denegado
+    """
+    messages = state["messages"]
+    intents = state["intents"]
+    business_info = state["business_info"]
+
+    # Determinar qué tipo de acceso fue denegado
+    denied_feature = ""
+
+    if "estado_alarma" in intents:
+        denied_feature = "consultar el estado de tu alarma"
+    elif "escaneo_camaras" in intents:
+        denied_feature = "escanear las cámaras"
+    elif "problema_alarma" in intents:
+        denied_feature = "usar el asistente de resolución de problemas"
+    elif "control_alarma" in intents:
+        denied_feature = "controlar la alarma"
+
+    # Crear mensaje personalizado
+    response = f"⚠️ Lo siento, no tengo permitido {denied_feature}. Para mas información recomiendo que te contactes con nuestro equipo de ventas.\n\n"
+
+    # Agregar información de contacto para upgrades
+    if "whatsapp_ventas" in business_info:
+        response += f"📞 Departamento de ventas: {business_info.get('whatsapp_ventas', 'No disponible')}"
 
     # Añadir respuesta al historial
     messages.append(AIMessage(content=response))

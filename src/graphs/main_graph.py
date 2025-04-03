@@ -12,6 +12,7 @@ from src.graphs.handlers import (
     start_troubleshooting,
     process_troubleshooting,
     handle_general_response,
+    handle_access_denied,
     finalize_response
 )
 from src.graphs.routers import route_main_conversation
@@ -48,6 +49,7 @@ def create_conversation_graph():
     conversation_graph.add_node("START_TROUBLESHOOTING", start_troubleshooting)
     conversation_graph.add_node("TROUBLESHOOTING", process_troubleshooting)
     conversation_graph.add_node("GENERAL_RESPONSE", handle_general_response)
+    conversation_graph.add_node("ACCESS_DENIED", handle_access_denied)
     conversation_graph.add_node("FINAL", finalize_response)
 
     # Añadir enrutamiento condicional desde DETECT_INTENTS
@@ -60,7 +62,8 @@ def create_conversation_graph():
             "CAMERA_SCAN": "CAMERA_SCAN",
             "START_TROUBLESHOOTING": "START_TROUBLESHOOTING",
             "TROUBLESHOOTING": "TROUBLESHOOTING",
-            "GENERAL_RESPONSE": "GENERAL_RESPONSE"
+            "GENERAL_RESPONSE": "GENERAL_RESPONSE",
+            "ACCESS_DENIED": "ACCESS_DENIED"
         }
     )
 
@@ -73,6 +76,7 @@ def create_conversation_graph():
     conversation_graph.add_edge("CAMERA_SCAN", "FINAL")
     conversation_graph.add_edge("TROUBLESHOOTING", "FINAL")
     conversation_graph.add_edge("GENERAL_RESPONSE", "FINAL")
+    conversation_graph.add_edge("ACCESS_DENIED", "FINAL")
 
     # Definir punto de entrada y salida
     conversation_graph.set_entry_point("DETECT_INTENTS")
