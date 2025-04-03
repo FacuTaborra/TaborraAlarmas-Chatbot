@@ -125,6 +125,15 @@ class WhatsAppController:
             "troubleshooting_state": None
         }
 
+        # Verifica si hay un estado de troubleshooting activo
+        troubleshooting_state = await self.redis_manager.get_value(f"taborra:chat:{phone_user}:{chat_id}:state")
+        if troubleshooting_state:
+            # Recuperar el estado y convertir los mensajes
+            troubleshooting_state = self._recover_state_from_storage(
+                troubleshooting_state)
+            state["troubleshooting_active"] = True
+            state["troubleshooting_state"] = troubleshooting_state
+
         # Procesar con el grafo de conversación
         result = self.conversation_graph.invoke(state)
 
@@ -188,6 +197,19 @@ class WhatsAppController:
                     AIMessage(content=msg.get("content", "")))
         return messages_history
 
+    def _convert_stored_state_to_messages(self, state):
+        """Convierte mensajes almacenados de vuelta a objetos Message"""
+        if "messages" in state:
+            messages = []
+            for msg in state["messages"]:
+                if msg.get("role") == "user":
+                    messages.append(HumanMessage(
+                        content=msg.get("content", "")))
+                elif msg.get("role") == "assistant":
+                    messages.append(AIMessage(content=msg.get("content", "")))
+            state["messages"] = messages
+        return state
+
     async def _process_graph_result(self, result: Dict[str, Any], phone: str, chat_id: str) -> Dict[str, Any]:
         """
         Procesa el resultado del grafo de conversación.
@@ -219,11 +241,14 @@ class WhatsAppController:
             response_message.content
         )
 
-        # Manejar estado de troubleshooting
+    # Al guardar el estado de troubleshooting, convertirlo a formato serializable
         if result.get("troubleshooting_active", False) and result.get("troubleshooting_state"):
+            # Convertir los mensajes a formato serializable
+            serializable_state = self._prepare_state_for_storage(
+                result["troubleshooting_state"])
             await self.redis_manager.set_value(
                 f"taborra:chat:{phone}:{chat_id}:state",
-                result["troubleshooting_state"],
+                serializable_state,
                 1800  # 30 minutos
             )
         else:
@@ -237,6 +262,38 @@ class WhatsAppController:
         )
 
         return {"status": "Mensaje procesado y respuesta enviada"}
+
+    def _prepare_state_for_storage(self, state):
+        """Prepara el estado para almacenamiento en Redis convirtiendo objetos no serializables"""
+        serializable_state = {}
+
+        for key, value in state.items():
+            if key == "messages":
+                # Convertir mensajes a formato serializable
+                serializable_state[key] = []
+                for msg in value:
+                    if isinstance(msg, HumanMessage):
+                        serializable_state[key].append({
+                            "role": "user",
+                            "content": msg.content
+                        })
+                    elif isinstance(msg, AIMessage):
+                        serializable_state[key].append({
+                            "role": "assistant",
+                            "content": msg.content
+                        })
+            else:
+                # Copiar otros valores como están
+                serializable_state[key] = value
+
+        return serializable_state
+
+    def _recover_state_from_storage(self, state):
+        """Recupera el estado de almacenamiento convirtiendo a objetos LangChain"""
+        if "messages" in state and isinstance(state["messages"], list):
+            state["messages"] = self._convert_history_to_messages(
+                state["messages"])
+        return state
 
     async def close(self):
         """

@@ -2,12 +2,9 @@
 Handlers para cada nodo del grafo de conversación principal.
 """
 from typing import Dict, Any
-from langchain_core.messages import AIMessage
-from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage, HumanMessage
 from src.graphs.troubleshooting import create_troubleshooting_graph
-from src.config.settings import settings
-import src.template.prompts as prompts
+from src.graphs.troubleshooting import confirmation_step
 
 
 def detect_intents(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -153,34 +150,79 @@ def start_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
 def process_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Nodo para procesar el flujo de resolución de problemas
-
-    Args:
-        state: Estado actual de la conversación
-
-    Returns:
-        Estado con resultados del proceso de troubleshooting
     """
-    # Obtener grafo de troubleshooting
-    troubleshooting_graph = create_troubleshooting_graph()
+    try:
+        # En vez de usar el grafo, implementar manualmente el flujo
+        troubleshooting_state = state["troubleshooting_state"]
+        current_step = troubleshooting_state.get("current_step", 0)
 
-    # Procesar estado con el grafo
-    result = troubleshooting_graph.invoke(state["troubleshooting_state"])
+        # Importar las funciones necesarias
+        from src.graphs.troubleshooting import (
+            confirmation_step,
+            keyboard_selection,
+            process_keyboard_selection,
+            process_problem_selection,
+            process_rating,
+            exit_flow
+        )
 
-    # Verificar si hemos terminado
-    if result["current_step"] == 0 and len(result["messages"]) > 1:
+        # Ejecutar el paso correspondiente según el estado actual
+        if current_step == 0:
+            result = confirmation_step(troubleshooting_state)
+        elif current_step == 1:
+            # Verificar si el usuario quiere continuar
+            if len(troubleshooting_state["messages"]) > 0:
+                for msg in reversed(troubleshooting_state["messages"]):
+                    if isinstance(msg, HumanMessage):
+                        last_msg = msg.content.lower()
+                        confirmation_phrases = [
+                            "si", "sí", "yes", "quiero", "dale", "ok", "1", "aceptar"]
+                        if any(phrase == last_msg or phrase in last_msg.split() for phrase in confirmation_phrases):
+                            result = keyboard_selection(troubleshooting_state)
+                        else:
+                            result = exit_flow(troubleshooting_state)
+                        break
+                else:
+                    # No se encontró mensaje del usuario
+                    result = troubleshooting_state
+            else:
+                result = troubleshooting_state
+        elif current_step == 2:
+            result = process_keyboard_selection(troubleshooting_state)
+        elif current_step == 3:
+            result = process_problem_selection(troubleshooting_state)
+        elif current_step == 4:
+            result = process_rating(troubleshooting_state)
+        else:
+            result = exit_flow(troubleshooting_state)
+
+        # Verificar si hemos terminado
+        if result.get("current_step", 0) == 0 and len(result.get("messages", [])) > 1:
+            return {
+                **state,
+                "messages": result["messages"],
+                "troubleshooting_active": False,
+                "troubleshooting_state": None
+            }
+
+        # Continuar el flujo
         return {
             **state,
             "messages": result["messages"],
+            "troubleshooting_state": result
+        }
+    except Exception as e:
+        print(f"Error en process_troubleshooting: {e}")
+        # Para errores, salir del flujo de troubleshooting
+        messages = state["messages"]
+        messages.append(AIMessage(
+            content="Lo siento, hubo un problema con el asistente de resolución. Por favor, contacta directamente con nuestro servicio técnico."))
+        return {
+            **state,
+            "messages": messages,
             "troubleshooting_active": False,
             "troubleshooting_state": None
         }
-
-    # Continuar el flujo
-    return {
-        **state,
-        "messages": result["messages"],
-        "troubleshooting_state": result
-    }
 
 
 def handle_general_response(state: Dict[str, Any]) -> Dict[str, Any]:

@@ -2,6 +2,7 @@
 Funciones de enrutamiento para los grafos de conversación.
 """
 from typing import Dict, Any
+from langchain_core.messages import HumanMessage
 
 
 def route_main_conversation(state: Dict[str, Any]) -> str:
@@ -74,8 +75,8 @@ def route_troubleshooting(state: Dict[str, Any]) -> str:
     current_step = state["current_step"]
 
     # Verificar si el usuario quiere salir
-    if len(state["messages"]) > 0 and state["messages"][-1].get("role") == "user":
-        last_msg = state["messages"][-1].get("content", "").lower()
+    if len(state["messages"]) > 0 and isinstance(state["messages"][-1], HumanMessage):
+        last_msg = state["messages"][-1].content.lower()
         exit_phrases = ["salir", "cancelar", "terminar", "no quiero seguir", "quiero hablar de otra cosa",
                         "volver", "atrás", "atras", "menu", "menú", "menu principal"]
         if any(phrase in last_msg for phrase in exit_phrases):
@@ -85,9 +86,10 @@ def route_troubleshooting(state: Dict[str, Any]) -> str:
     if current_step == 0:
         return "CONFIRMATION"
     elif current_step == 1:
-        if len(state["messages"]) > 0 and state["messages"][-1].get("role") == "user":
-            last_msg = state["messages"][-1].get("content", "").lower()
-            confirmation_phrases = ["si", "sí", "yes",
+        if len(state["messages"]) > 0 and isinstance(state["messages"][-1], HumanMessage):
+            last_msg = state["messages"][-1].content.lower()
+            confirmation_phrases = ["si", "sí", "yes", "Si", "SI", "SÍ", "quiero", "quiero seguir",
+                                    "quiero continuar", "quiero seguir con esto", "quiero continuar con esto",
                                     "quiero", "dale", "ok", "1", "aceptar"]
             if any(phrase == last_msg or phrase in last_msg.split() for phrase in confirmation_phrases):
                 return "KEYBOARD_SELECTION"

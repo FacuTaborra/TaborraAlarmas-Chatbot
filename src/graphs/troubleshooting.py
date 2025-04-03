@@ -283,7 +283,7 @@ def create_troubleshooting_graph():
         route_troubleshooting,
         {
             "KEYBOARD_SELECTION": "KEYBOARD_SELECTION",
-            "EXIT": "EXIT"
+            "EXIT": "EXIT",
         }
     )
 
