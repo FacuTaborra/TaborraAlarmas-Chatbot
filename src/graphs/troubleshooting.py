@@ -225,6 +225,8 @@ def process_rating(state: TroubleshootingState) -> TroubleshootingState:
     # Comprobar si es una calificación
     if user_message.isdigit() and 1 <= int(user_message) <= 5:
         rating = int(user_message)
+        print(
+            f"💯 Rating recibido: {rating} para problema {state.get('problem_type')} en teclado {state.get('keyboard_type')}")
         response = f"¡Gracias por tu calificación de {rating}/5! ¿Hay algo más en lo que pueda ayudarte con tu alarma?\n\n_Puedes escribir 'salir' o 'cancelar' para terminar el asistente._"
         messages.append(AIMessage(content=response))
 

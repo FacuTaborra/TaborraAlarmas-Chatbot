@@ -3,6 +3,7 @@ Handlers para cada nodo del grafo de conversación principal.
 """
 from typing import Dict, Any
 from langchain_core.messages import AIMessage, HumanMessage
+import traceback
 from src.graphs.troubleshooting import (
     confirmation_step,
     keyboard_selection,
@@ -237,12 +238,29 @@ def process_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # Verificar si hemos terminado
         if result.get("current_step", -1) == 0:
-            print("Flujo terminado, saliendo")
+            final_result = {
+                **state,
+                "messages": result["messages"],
+                "troubleshooting_active": False,
+                "troubleshooting_state": None,
+                "rating_info": {
+                    "rating": result.get("rating"),
+                    "keyboard_type": result.get("keyboard_type"),
+                    "problem_type": result.get("problem_type")
+                }
+            }
+            print(f"Flujo terminado, saliendo: {final_result}")
+
             return {
                 **state,
                 "messages": result["messages"],
                 "troubleshooting_active": False,
-                "troubleshooting_state": None
+                "troubleshooting_state": None,
+                "rating_info": {
+                    "rating": result.get("rating"),
+                    "keyboard_type": result.get("keyboard_type"),
+                    "problem_type": result.get("problem_type")
+                }
             }
 
         print(f"Continuando flujo, próximo paso: {result.get('current_step')}")
@@ -254,7 +272,6 @@ def process_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as e:
         print(f"Error en process_troubleshooting: {e}")
-        import traceback
         traceback.print_exc()
         # Para cualquier error, salir del flujo con mensaje de error
         messages = state["messages"]

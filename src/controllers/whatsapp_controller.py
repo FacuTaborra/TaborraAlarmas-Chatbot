@@ -225,6 +225,7 @@ class WhatsAppController:
             Diccionario con estado del procesamiento
         """
         final_messages = result.get("messages", [])
+        rating_info = result.get("rating_info", None)
 
         if not final_messages or not isinstance(final_messages[-1], AIMessage):
             return {"status": "No se generó respuesta"}
@@ -266,18 +267,16 @@ class WhatsAppController:
             # Envío normal de texto
             await self.whatsapp_service.split_and_send_message(user_data.get("phone"), response_message.content)
 
-            # Verificar si hay una calificación para guardar
+        # Verificar si hay una calificación para guardar
+        print(
+            f"📝 Información de calificación: {result} y rating_info {rating_info}")
 
-        # Guardar calificación si existe
+        if rating_info and rating_info.get("rating") is not None:
+            rating = rating_info.get("rating")
+            keyboard_type = rating_info.get("keyboard_type", "desconocido")
+            problem_type = rating_info.get("problem_type", "desconocido")
 
-        rating = result.get("rating")
-        print(f"📝 Calificación detectada: {rating}")
-        if rating is not None:
-            # Obtener detalles para guardar
-            problem_type = result.get(
-                "problem_type", "desconocido")
-            keyboard_type = result.get(
-                "keyboard_type", "desconocido")
+            print(f"📝 Calificación detectada: {rating}")
 
             if user_data and "id" in user_data:
                 print(

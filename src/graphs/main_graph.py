@@ -29,6 +29,7 @@ class ConversationState(TypedDict):
     business_info: Dict[str, Any]
     troubleshooting_active: bool
     troubleshooting_state: Optional[Dict[str, Any]]
+    rating_info: Optional[Dict[str, Any]]
 
 
 def create_conversation_graph():
