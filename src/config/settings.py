@@ -24,8 +24,10 @@ class Settings(BaseSettings):
         default_factory=lambda: os.getenv("WHATSAPP_RECIPIENT", ""))
     VERIFY_TOKEN: str = Field(
         default_factory=lambda: os.getenv("VERIFY_TOKEN"))
-    URL_SERVIDOR: str = Field(
-        default_factory=lambda: os.getenv("URL_SERVIDOR"))
+
+    @property
+    def URL_SERVIDOR(self) -> str:
+        return os.getenv("URL_SERVIDOR", "")
 
     # Home Assistant
     HOME_ASSISTANT_URL: Optional[str] = Field(

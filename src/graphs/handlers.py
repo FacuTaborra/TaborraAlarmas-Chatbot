@@ -238,19 +238,7 @@ def process_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # Verificar si hemos terminado
         if result.get("current_step", -1) == 0:
-            final_result = {
-                **state,
-                "messages": result["messages"],
-                "troubleshooting_active": False,
-                "troubleshooting_state": None,
-                "rating_info": {
-                    "rating": result.get("rating"),
-                    "keyboard_type": result.get("keyboard_type"),
-                    "problem_type": result.get("problem_type")
-                }
-            }
-            print(f"Flujo terminado, saliendo: {final_result}")
-
+            print("Flujo de troubleshooting terminado")
             return {
                 **state,
                 "messages": result["messages"],

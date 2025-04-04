@@ -8,7 +8,7 @@ from src.core.database import Database
 from src.utils.helpers import parse_whatsapp_payload
 from src.config.settings import settings
 from langchain_core.messages import HumanMessage, AIMessage
-from src.template.keyboard_types import KEYBOARD_TYPES
+from src.template.keyboard_types import KEYBOARD_TYPES, get_keyboard_image_url
 
 
 class WhatsAppController:
@@ -253,34 +253,29 @@ class WhatsAppController:
 
         # Si es selección de teclado, enviar imágenes
         if is_keyboard_selection:
-            # Importar la estructura de teclados
-
             # Primero enviar el mensaje con las opciones
             await self.whatsapp_service.send_message(user_data.get("phone"), response_message.content)
 
             # Luego enviar cada imagen de teclado
-            for keyboard in KEYBOARD_TYPES.items():
-                if "image_url" in keyboard:
-                    caption = f"{keyboard['name']}"
-                    await self.whatsapp_service.send_image(user_data.get("phone"), keyboard["image_url"], caption)
+            # Luego enviar cada imagen de teclado
+            for i, (key, keyboard) in enumerate(KEYBOARD_TYPES.items(), 1):
+                caption = f"Digite el número {i} para seleccionar el teclado {keyboard['name']}"
+                # Obtener URL actual
+                current_url = settings.URL_SERVIDOR
+                image_url = get_keyboard_image_url(key, current_url)
+                print(f"🔗 URL de la imagen del teclado: {image_url}")
+                await self.whatsapp_service.send_image(user_data.get("phone"), image_url, caption)
         else:
             # Envío normal de texto
             await self.whatsapp_service.split_and_send_message(user_data.get("phone"), response_message.content)
 
         # Verificar si hay una calificación para guardar
-        print(
-            f"📝 Información de calificación: {result} y rating_info {rating_info}")
-
         if rating_info and rating_info.get("rating") is not None:
             rating = rating_info.get("rating")
             keyboard_type = rating_info.get("keyboard_type", "desconocido")
             problem_type = rating_info.get("problem_type", "desconocido")
 
-            print(f"📝 Calificación detectada: {rating}")
-
             if user_data and "id" in user_data:
-                print(
-                    f"📝 Guardando calificación {rating} para el usuario {user_data.get('id')}")
                 user_id = user_data.get('id')
 
                 # Guardar en base de datos

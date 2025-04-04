@@ -1,11 +1,11 @@
 # Definición de tipos de teclados y sus problemas comunes
 from typing import Dict
-from src.config.settings import settings
+
 
 KEYBOARD_TYPES = {
     "modelo_1555": {
         "name": "Modelo 1555",
-        "image_url":  f"{settings.URL_SERVIDOR}/imagenes/images/teclado_1555.jpg",
+        "image_url": "teclado_1555.jpg",
         "problems": {
             "no_puede_activar": {
                 "title": "No puedo activar el sistema",
@@ -111,7 +111,7 @@ KEYBOARD_TYPES = {
     },
     "modelo_5500": {
         "name": "Modelo 5500",
-        "image_url":  f"{settings.URL_SERVIDOR}/imagenes/images/teclado_5500.jpg",
+        "image_url":  "teclado_5500.jpg",
         "problems": {
             "no_puede_activar": {
                 "title": "No puedo activar el sistema",
@@ -217,7 +217,7 @@ KEYBOARD_TYPES = {
     },
     "modelo_neo_lcd": {
         "name": "Modelo NEO LCD",
-        "image_url":  f"{settings.URL_SERVIDOR}/imagenes/images/teclado_neo_lcd.jpg",
+        "image_url":  "teclado_neo_lcd.jpg",
         "problems": {
             "no_puede_activar": {
                 "title": "No puedo activar el sistema",
@@ -324,12 +324,20 @@ KEYBOARD_TYPES = {
     # The rest of the KEYBOARD_TYPES dictionary follows the same pattern for Modelo 5500 and NEO LCD models
     # I'll omit those for brevity, but they would be updated in the same manner with proper capitalization
     "alax": {
-        "name": "Alax",
-        "image_url": f"{settings.URL_SERVIDOR}/imagenes/images/teclado_ajax.jpg",
+        "name": "Ajax",
+        "image_url": "teclado_ajax.jpg",
         "direct_support": True,
         "support_message": "Para el modelo Alax, es necesario contactar directamente con soporte técnico debido a su configuración especial. ¿Deseas que te facilite el número de contacto?"
     }
 }
+
+
+def get_keyboard_image_url(keyboard_type, base_url):
+    """Genera URL completa usando la base proporcionada"""
+    keyboard = KEYBOARD_TYPES.get(keyboard_type)
+    if keyboard and "image_url" in keyboard:
+        return f"{base_url}/teclados/{keyboard['image_url']}"
+    return None
 
 
 def get_keyboard_options_text() -> str:

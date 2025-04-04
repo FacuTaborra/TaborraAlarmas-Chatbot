@@ -1,20 +1,28 @@
 # src/main.py
 import uvicorn
+import os
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+from src.config.settings import Settings
 
 # Importar componentes
 from src.core.database import Database
 from src.core.memory import RedisManager
 from src.routes import whatsapp_routes, image_routes
+from pathlib import Path
+
 
 # Cargar variables de entorno
-load_dotenv()
-
+os.environ.clear()
+load_dotenv(override=True)
 # Inicializar servicios
 database = Database()
 redis_manager = RedisManager()
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+static_dir = BASE_DIR / "public"
 
 
 @asynccontextmanager
@@ -36,7 +44,11 @@ async def lifespan(app: FastAPI):
 # Crear la aplicación FastAPI
 app = FastAPI(lifespan=lifespan)
 
-# Incluir rutas
+# En main.py
+teclados_dir = BASE_DIR / "public" / "imagenes_teclados"
+app.mount("/teclados", StaticFiles(directory=teclados_dir), name="teclados")
+
+
 app.include_router(whatsapp_routes.router,
                    prefix="/webhook", tags=["WhatsApp"])
 app.include_router(image_routes.router, prefix="/webhook", tags=["Images"])
