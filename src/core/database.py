@@ -90,8 +90,10 @@ class Database:
             async with conn.cursor() as cursor:
                 try:
                     await cursor.execute(query, (first_name, last_name, phone))
+                    await cursor.execute("SELECT LAST_INSERT_ID()")
+                    user_id = (await cursor.fetchone())[0]
                     await conn.commit()
-                    return True
+                    return user_id
                 except Exception as e:
                     await conn.rollback()
                     print(f"❌ Error al registrar usuario: {e}")
@@ -192,3 +194,31 @@ class Database:
         except Exception as e:
             print(f"❌ Error al cargar información del negocio: {e}")
             return {}
+
+    async def save_rating(self, user_id: int, rating: int, keyboard_type: str, problem_type: str) -> bool:
+        """Guarda una calificación de solución en la BD.
+
+        Args:
+            user_id: ID o teléfono del usuario
+            rating: Calificación (1-5)
+            keyboard_type: Tipo de teclado
+            problem_type: Tipo de problema
+
+        Returns:
+            True si se guardó correctamente
+        """
+        await self.connect()
+        query = """
+        INSERT INTO ratings (user_id, rating, keyboard_type, problem_type, timestamp)
+        VALUES (%s, %s, %s, %s, NOW())
+        """
+        async with self.write_pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                try:
+                    await cursor.execute(query, (user_id, rating, keyboard_type, problem_type))
+                    await conn.commit()
+                    return True
+                except Exception as e:
+                    await conn.rollback()
+                    print(f"❌ Error al guardar calificación: {e}")
+                    return False

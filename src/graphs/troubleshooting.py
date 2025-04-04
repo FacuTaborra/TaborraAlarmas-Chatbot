@@ -6,8 +6,10 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph
 from src.template.keyboard_types import KEYBOARD_TYPES, get_keyboard_options_text, get_problems_options_text, generate_solution_response
 from src.graphs.routers import route_troubleshooting
+from src.core.database import Database
 
 # Definición del tipo de estado
+db = Database()
 
 
 class TroubleshootingState(TypedDict):
@@ -60,6 +62,7 @@ def keyboard_selection(state: TroubleshootingState) -> TroubleshootingState:
     # Preparar respuesta con opciones de teclados
     response = "Para ayudarte mejor, necesito saber qué modelo de teclado de alarma tienes.\n\n"
     response += get_keyboard_options_text()
+    response += "\n_Puedes escribir 'salir' o 'cancelar' en cualquier momento para salir del asistente._"
     messages.append(AIMessage(content=response))
 
     return {
@@ -179,8 +182,9 @@ def process_problem_selection(state: TroubleshootingState) -> TroubleshootingSta
 
     if not selected_problem:
         # No pudimos identificar el problema
-        response = f"No pude identificar el problema que mencionas. Por favor, selecciona uno de estos problemas comunes:\n\n"
+        response = "No pude identificar el problema que mencionas. Por favor, selecciona uno de estos problemas comunes:\n\n"
         response += get_problems_options_text(keyboard_type)
+        response += "\n_Puedes escribir 'salir' o 'cancelar' en cualquier momento para salir del asistente._"
         messages.append(AIMessage(content=response))
         return {**state, "messages": messages}
 
@@ -221,8 +225,9 @@ def process_rating(state: TroubleshootingState) -> TroubleshootingState:
     # Comprobar si es una calificación
     if user_message.isdigit() and 1 <= int(user_message) <= 5:
         rating = int(user_message)
-        response = f"¡Gracias por tu calificación de {rating}/5! ¿Hay algo más en lo que pueda ayudarte con tu alarma?"
+        response = f"¡Gracias por tu calificación de {rating}/5! ¿Hay algo más en lo que pueda ayudarte con tu alarma?\n\n_Puedes escribir 'salir' o 'cancelar' para terminar el asistente._"
         messages.append(AIMessage(content=response))
+
         return {
             **state,
             "messages": messages,
@@ -231,7 +236,7 @@ def process_rating(state: TroubleshootingState) -> TroubleshootingState:
         }
 
     # El usuario probablemente está haciendo otra pregunta o necesita más ayuda
-    response = "¿Quieres que te ayude con otro problema de tu alarma?"
+    response = "¿Quieres que te ayude con otro problema de tu alarma?\n\n_Puedes escribir 'salir' o 'cancelar' para terminar el asistente._"
     messages.append(AIMessage(content=response))
 
     return {

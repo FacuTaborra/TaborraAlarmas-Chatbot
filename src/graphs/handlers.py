@@ -3,8 +3,14 @@ Handlers para cada nodo del grafo de conversación principal.
 """
 from typing import Dict, Any
 from langchain_core.messages import AIMessage, HumanMessage
-from src.graphs.troubleshooting import create_troubleshooting_graph
-from src.graphs.troubleshooting import confirmation_step
+from src.graphs.troubleshooting import (
+    confirmation_step,
+    keyboard_selection,
+    process_keyboard_selection,
+    process_problem_selection,
+    process_rating,
+    exit_flow
+)
 
 
 def detect_intents(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -130,6 +136,7 @@ def start_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
         Estado con el flujo de troubleshooting iniciado
     """
     # Preparar estado para el flujo de troubleshooting
+
     troubleshooting_state = {
         "messages": state["messages"],
         "current_step": 0,
@@ -137,8 +144,10 @@ def start_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
         "problem_type": None,
         "solutions_shown": [],
         "rating": None,
-        "business_info": state["business_info"]
+        "business_info": state["business_info"],
+        "user_data": state.get("user_data", None)
     }
+    print(f"🔧 Iniciando flujo de troubleshooting: {troubleshooting_state}")
 
     return {
         **state,
@@ -152,52 +161,31 @@ def process_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
     Nodo para procesar el flujo de resolución de problemas
     """
     try:
-        # En vez de usar el grafo, implementar manualmente el flujo
+        # Obtener estado actual
         troubleshooting_state = state["troubleshooting_state"]
         current_step = troubleshooting_state.get("current_step", 0)
 
-        # Importar las funciones necesarias
-        from src.graphs.troubleshooting import (
-            confirmation_step,
-            keyboard_selection,
-            process_keyboard_selection,
-            process_problem_selection,
-            process_rating,
-            exit_flow
-        )
+        # IMPORTANTE: Actualizar los mensajes del troubleshooting_state con los mensajes actuales
+        troubleshooting_state["messages"] = state["messages"]
 
-        # Ejecutar el paso correspondiente según el estado actual
-        if current_step == 0:
-            result = confirmation_step(troubleshooting_state)
-        elif current_step == 1:
-            # Verificar si el usuario quiere continuar
-            if len(troubleshooting_state["messages"]) > 0:
-                for msg in reversed(troubleshooting_state["messages"]):
-                    if isinstance(msg, HumanMessage):
-                        last_msg = msg.content.lower()
-                        confirmation_phrases = [
-                            "si", "sí", "yes", "quiero", "dale", "ok", "1", "aceptar"]
-                        if any(phrase == last_msg or phrase in last_msg.split() for phrase in confirmation_phrases):
-                            result = keyboard_selection(troubleshooting_state)
-                        else:
-                            result = exit_flow(troubleshooting_state)
-                        break
-                else:
-                    # No se encontró mensaje del usuario
-                    result = troubleshooting_state
-            else:
-                result = troubleshooting_state
-        elif current_step == 2:
-            result = process_keyboard_selection(troubleshooting_state)
-        elif current_step == 3:
-            result = process_problem_selection(troubleshooting_state)
-        elif current_step == 4:
-            result = process_rating(troubleshooting_state)
-        else:
+        # Verificar primero si el usuario quiere salir (antes de cualquier otro procesamiento)
+        last_user_message = None
+        for msg in reversed(troubleshooting_state["messages"]):
+            if isinstance(msg, HumanMessage):
+                last_user_message = msg.content.lower()
+                break
+
+        # Lista ampliada de frases para salir
+        exit_phrases = [
+            "salir", "cancelar", "terminar", "no quiero seguir", "quiero hablar de otra cosa",
+            "volver", "atrás", "atras", "menu", "menú", "menu principal", "exit", "no", "chau",
+            "ya no", "stop", "parar", "no me interesa", "otro tema", "no gracias", "salida"
+        ]
+
+        # Si el usuario quiere salir, hacerlo inmediatamente
+        if last_user_message and any(phrase in last_user_message for phrase in exit_phrases):
+            print(f"Usuario solicitó salir con: '{last_user_message}'")
             result = exit_flow(troubleshooting_state)
-
-        # Verificar si hemos terminado
-        if result.get("current_step", 0) == 0 and len(result.get("messages", [])) > 1:
             return {
                 **state,
                 "messages": result["messages"],
@@ -205,6 +193,59 @@ def process_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
                 "troubleshooting_state": None
             }
 
+        # Si no quiere salir, continuar con el flujo normal
+        print(f"Paso actual: {current_step}")
+
+        if current_step == 0:
+            # Paso inicial de confirmación
+            result = confirmation_step(troubleshooting_state)
+            print("Confirmación mostrada, pasando a paso 1")
+        elif current_step == 1:
+            # Verificar si el usuario quiere continuar
+            print("Procesando respuesta de confirmación")
+            user_confirmed = False
+
+            if last_user_message:
+                confirmation_phrases = ["si", "sí", "yes",
+                                        "quiero", "dale", "ok", "1", "aceptar"]
+                user_confirmed = any(phrase == last_user_message or phrase in last_user_message.split(
+                ) for phrase in confirmation_phrases)
+                print(f"¿Usuario confirmó?: {user_confirmed}")
+
+            if user_confirmed:
+                print("Usuario confirmó, mostrando opciones de teclado")
+                result = keyboard_selection(troubleshooting_state)
+            else:
+                print("Usuario no confirmó, saliendo del flujo")
+                result = exit_flow(troubleshooting_state)
+        elif current_step == 2:
+            # Procesar selección de teclado
+            print("Procesando selección de teclado")
+            result = process_keyboard_selection(troubleshooting_state)
+        elif current_step == 3:
+            # Procesar selección de problema
+            print("Procesando selección de problema")
+            result = process_problem_selection(troubleshooting_state)
+        elif current_step == 4:
+            # Procesar calificación
+            print("Procesando calificación")
+            result = process_rating(troubleshooting_state)
+        else:
+            # Paso no reconocido, salir del flujo
+            print(f"Paso no reconocido: {current_step}, saliendo")
+            result = exit_flow(troubleshooting_state)
+
+        # Verificar si hemos terminado
+        if result.get("current_step", -1) == 0:
+            print("Flujo terminado, saliendo")
+            return {
+                **state,
+                "messages": result["messages"],
+                "troubleshooting_active": False,
+                "troubleshooting_state": None
+            }
+
+        print(f"Continuando flujo, próximo paso: {result.get('current_step')}")
         # Continuar el flujo
         return {
             **state,
@@ -213,7 +254,9 @@ def process_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as e:
         print(f"Error en process_troubleshooting: {e}")
-        # Para errores, salir del flujo de troubleshooting
+        import traceback
+        traceback.print_exc()
+        # Para cualquier error, salir del flujo con mensaje de error
         messages = state["messages"]
         messages.append(AIMessage(
             content="Lo siento, hubo un problema con el asistente de resolución. Por favor, contacta directamente con nuestro servicio técnico."))

@@ -8,6 +8,7 @@ from src.core.database import Database
 from src.utils.helpers import parse_whatsapp_payload
 from src.config.settings import settings
 from langchain_core.messages import HumanMessage, AIMessage
+from src.template.keyboard_types import KEYBOARD_TYPES
 
 
 class WhatsAppController:
@@ -138,7 +139,7 @@ class WhatsAppController:
         result = self.conversation_graph.invoke(state)
 
         # Extraer y enviar respuesta
-        return await self._process_graph_result(result, phone_user, chat_id)
+        return await self._process_graph_result(result, user_data, chat_id)
 
     async def _get_or_create_user(self, phone: str, name: str) -> Dict[str, Any]:
         """
@@ -164,8 +165,9 @@ class WhatsAppController:
                 first_name = names[0]
                 last_name = names[1] if len(names) > 1 else ""
 
-                await self.database.register_user(first_name, last_name, phone)
+                user_id = await self.database.register_user(first_name, last_name, phone)
                 user_data = {
+                    "id": user_id,
                     "first_name": first_name,
                     "last_name": last_name,
                     "phone": phone,
@@ -210,7 +212,7 @@ class WhatsAppController:
             state["messages"] = messages
         return state
 
-    async def _process_graph_result(self, result: Dict[str, Any], phone: str, chat_id: str) -> Dict[str, Any]:
+    async def _process_graph_result(self, result: Dict[str, Any], user_data: Dict[str, Any], chat_id: str) -> Dict[str, Any]:
         """
         Procesa el resultado del grafo de conversación.
 
@@ -231,35 +233,86 @@ class WhatsAppController:
 
         # Guardar en historial de mensajes
         await self.redis_manager.add_message_to_history(
-            f"chat:{phone}",
+            f"chat:{user_data.get("phone")}",
             "user",
             final_messages[-2].content  # El último mensaje de usuario
         )
         await self.redis_manager.add_message_to_history(
-            f"chat:{phone}",
+            f"chat:{user_data.get("phone")}",
             "assistant",
             response_message.content
         )
 
-    # Al guardar el estado de troubleshooting, convertirlo a formato serializable
+        # Detectar si estamos en el paso de selección de teclado
+        is_keyboard_selection = False
+        if result.get("troubleshooting_active") and result.get("troubleshooting_state"):
+            ts_state = result["troubleshooting_state"]
+            if ts_state.get("current_step") == 2:  # Paso de selección de teclado
+                is_keyboard_selection = True
+
+        # Si es selección de teclado, enviar imágenes
+        if is_keyboard_selection:
+            # Importar la estructura de teclados
+
+            # Primero enviar el mensaje con las opciones
+            await self.whatsapp_service.send_message(user_data.get("phone"), response_message.content)
+
+            # Luego enviar cada imagen de teclado
+            for keyboard in KEYBOARD_TYPES.items():
+                if "image_url" in keyboard:
+                    caption = f"{keyboard['name']}"
+                    await self.whatsapp_service.send_image(user_data.get("phone"), keyboard["image_url"], caption)
+        else:
+            # Envío normal de texto
+            await self.whatsapp_service.split_and_send_message(user_data.get("phone"), response_message.content)
+
+            # Verificar si hay una calificación para guardar
+
+        # Guardar calificación si existe
+
+        rating = result.get("rating")
+        print(f"📝 Calificación detectada: {rating}")
+        if rating is not None:
+            # Obtener detalles para guardar
+            problem_type = result.get(
+                "problem_type", "desconocido")
+            keyboard_type = result.get(
+                "keyboard_type", "desconocido")
+
+            if user_data and "id" in user_data:
+                print(
+                    f"📝 Guardando calificación {rating} para el usuario {user_data.get('id')}")
+                user_id = user_data.get('id')
+
+                # Guardar en base de datos
+                try:
+                    await self.database.save_rating(
+                        user_id=user_id,
+                        rating=rating,
+                        keyboard_type=keyboard_type,
+                        problem_type=problem_type
+                    )
+                    print(
+                        f"✅ Calificación {rating} guardada para usuario {user_id}, problema {problem_type}, teclado {keyboard_type}")
+                except Exception as e:
+                    print(f"❌ Error al guardar calificación: {e}")
+            else:
+                print(
+                    f"⚠️ No se pudo encontrar el ID del usuario para el teléfono {user_data.get("phone")}")
+
+        # Al guardar el estado de troubleshooting, convertirlo a formato serializable
         if result.get("troubleshooting_active", False) and result.get("troubleshooting_state"):
             # Convertir los mensajes a formato serializable
             serializable_state = self._prepare_state_for_storage(
                 result["troubleshooting_state"])
             await self.redis_manager.set_value(
-                f"taborra:chat:{phone}:{chat_id}:state",
+                f"taborra:chat:{user_data.get("phone")}:{chat_id}:state",
                 serializable_state,
                 1800  # 30 minutos
             )
         else:
             # Si estaba activo pero ya no, eliminarlo
-            await self.redis_manager.delete_key(f"taborra:chat:{phone}:{chat_id}:state")
-
-        # Enviar respuesta por WhatsApp
-        await self.whatsapp_service.split_and_send_message(
-            phone,
-            response_message.content
-        )
+            await self.redis_manager.delete_key(f"taborra:chat:{user_data.get("phone")}:{chat_id}:state")
 
         return {"status": "Mensaje procesado y respuesta enviada"}
 
