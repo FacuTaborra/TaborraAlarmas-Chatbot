@@ -232,14 +232,42 @@ class WhatsAppController:
 
         response_message = final_messages[-1]
 
-        # Guardar en historial de mensajes
+        # Obtener usuario_id
+        user_id = user_data.get("id")
+
+        if user_id:
+            # Buscar conversación activa o crear una nueva
+            conversation_id = await self.database.find_active_conversation(user_id, chat_id)
+
+            if not conversation_id:
+                conversation_id = await self.database.create_conversation(user_id, chat_id)
+
+            if conversation_id:
+                # Si hay mensajes nuevos, guardarlos en la base de datos
+                if len(final_messages) >= 2:
+                    # Guardar el último mensaje del usuario
+                    await self.database.save_conversation_message(
+                        conversation_id,
+                        "user",
+                        # El último mensaje de usuario
+                        final_messages[-2].content
+                    )
+
+                    # Guardar la respuesta del asistente
+                    await self.database.save_conversation_message(
+                        conversation_id,
+                        "assistant",
+                        response_message.content
+                    )
+
+        # Guardar en historial de mensajes (Redis - temporal)
         await self.redis_manager.add_message_to_history(
-            f"chat:{user_data.get("phone")}",
+            f"chat:{user_data.get('phone')}",
             "user",
-            final_messages[-2].content  # El último mensaje de usuario
+            final_messages[-2].content if len(final_messages) >= 2 else ""
         )
         await self.redis_manager.add_message_to_history(
-            f"chat:{user_data.get("phone")}",
+            f"chat:{user_data.get('phone')}",
             "assistant",
             response_message.content
         )

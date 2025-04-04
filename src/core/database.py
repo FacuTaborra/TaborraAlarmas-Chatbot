@@ -23,7 +23,9 @@ class Database:
                 user=settings.DB_USER_READER,
                 password=settings.DB_PASS_READER,
                 database=settings.DB_NAME,
-                autocommit=True  # Para operaciones de solo lectura
+                autocommit=True,  # Para operaciones de solo lectura
+                charset="utf8mb4",  # Añadir esta línea
+                use_unicode=True   # Añadir esta línea
             )
         if not self.write_pool:
             # Para operaciones de escritura, desactivamos autocommit para manejar la transacción manualmente.
@@ -33,7 +35,9 @@ class Database:
                 user=settings.DB_USER_WRITER,
                 password=settings.DB_PASS_WRITER,
                 database=settings.DB_NAME,
-                autocommit=False
+                autocommit=False,
+                charset="utf8mb4",  # Añadir esta línea
+                use_unicode=True    # Añadir esta línea
             )
         return self.read_pool, self.write_pool
 
@@ -222,3 +226,170 @@ class Database:
                     await conn.rollback()
                     print(f"❌ Error al guardar calificación: {e}")
                     return False
+
+    async def create_conversation(self, user_id: int, chat_id: str) -> Optional[int]:
+        """
+        Crea una nueva conversación en la base de datos.
+
+        Args:
+            user_id: ID del usuario
+            chat_id: ID del chat (generado por Redis)
+
+        Returns:
+            ID de la conversación creada o None si hay error
+        """
+        await self.connect()
+        query = """
+        INSERT INTO conversations (user_id, chat_id, started_at, active)
+        VALUES (%s, %s, NOW(), TRUE)
+        """
+        async with self.write_pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                try:
+                    await cursor.execute(query, (user_id, chat_id))
+                    await cursor.execute("SELECT LAST_INSERT_ID()")
+                    conversation_id = (await cursor.fetchone())[0]
+                    await conn.commit()
+                    return conversation_id
+                except Exception as e:
+                    await conn.rollback()
+                    print(f"❌ Error al crear conversación: {e}")
+                    return None
+
+    async def find_active_conversation(self, user_id: int, chat_id: str) -> Optional[int]:
+        """
+        Busca una conversación activa para un usuario y chat_id específicos.
+
+        Args:
+            user_id: ID del usuario
+            chat_id: ID del chat
+
+        Returns:
+            ID de la conversación activa o None si no existe
+        """
+        await self.connect()
+        query = """
+        SELECT id FROM conversations 
+        WHERE user_id = %s AND chat_id = %s AND active = TRUE
+        LIMIT 1
+        """
+        try:
+            async with self.read_pool.acquire() as conn:
+                async with conn.cursor() as cursor:
+                    await cursor.execute(query, (user_id, chat_id))
+                    result = await cursor.fetchone()
+                    return result[0] if result else None
+        except Exception as e:
+            print(f"❌ Error al buscar conversación activa: {e}")
+            return None
+
+    async def close_conversation(self, conversation_id: int) -> bool:
+        """
+        Cierra una conversación marcándola como inactiva.
+
+        Args:
+            conversation_id: ID de la conversación
+
+        Returns:
+            True si se cerró correctamente
+        """
+        await self.connect()
+        query = """
+        UPDATE conversations 
+        SET active = FALSE, ended_at = NOW() 
+        WHERE id = %s
+        """
+        async with self.write_pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                try:
+                    await cursor.execute(query, (conversation_id,))
+                    await conn.commit()
+                    return True
+                except Exception as e:
+                    await conn.rollback()
+                    print(f"❌ Error al cerrar conversación: {e}")
+                    return False
+
+    async def save_conversation_message(self, conversation_id: int, role: str, content: str) -> bool:
+        """
+        Guarda un mensaje de conversación en la BD.
+
+        Args:
+            conversation_id: ID de la conversación
+            role: Rol ('user' o 'assistant')
+            content: Contenido del mensaje
+
+        Returns:
+            True si se guardó correctamente
+        """
+        await self.connect()
+        query = """
+        INSERT INTO conversation_messages (conversation_id, role, content, timestamp)
+        VALUES (%s, %s, %s, NOW())
+        """
+        async with self.write_pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                try:
+                    await cursor.execute(query, (conversation_id, role, content))
+                    await conn.commit()
+                    return True
+                except Exception as e:
+                    await conn.rollback()
+                    print(f"❌ Error al guardar mensaje de conversación: {e}")
+                    return False
+
+    async def get_conversation_messages(self, conversation_id: int, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Recupera los mensajes de una conversación.
+
+        Args:
+            conversation_id: ID de la conversación
+            limit: Número máximo de mensajes a recuperar
+
+        Returns:
+            Lista de mensajes
+        """
+        await self.connect()
+        query = """
+        SELECT id, role, content, timestamp 
+        FROM conversation_messages
+        WHERE conversation_id = %s 
+        ORDER BY timestamp ASC 
+        LIMIT %s
+        """
+        try:
+            async with self.read_pool.acquire() as conn:
+                async with conn.cursor(asyncmy.cursors.DictCursor) as cursor:
+                    await cursor.execute(query, (conversation_id, limit))
+                    return await cursor.fetchall()
+        except Exception as e:
+            print(f"❌ Error al obtener mensajes de conversación: {e}")
+            return []
+
+    async def get_user_conversations(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Recupera las conversaciones de un usuario.
+
+        Args:
+            user_id: ID del usuario
+            limit: Número máximo de conversaciones a recuperar
+
+        Returns:
+            Lista de conversaciones
+        """
+        await self.connect()
+        query = """
+        SELECT id, chat_id, started_at, ended_at, active 
+        FROM conversations
+        WHERE user_id = %s 
+        ORDER BY started_at DESC 
+        LIMIT %s
+        """
+        try:
+            async with self.read_pool.acquire() as conn:
+                async with conn.cursor(asyncmy.cursors.DictCursor) as cursor:
+                    await cursor.execute(query, (user_id, limit))
+                    return await cursor.fetchall()
+        except Exception as e:
+            print(f"❌ Error al obtener conversaciones del usuario: {e}")
+            return []
