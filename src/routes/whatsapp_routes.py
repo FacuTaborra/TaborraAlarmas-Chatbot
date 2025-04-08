@@ -25,7 +25,7 @@ async def validate_webhook(request: Request):
 
     except Exception as e:
         print(f"❌ Error en validación de webhook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/whatsapp")

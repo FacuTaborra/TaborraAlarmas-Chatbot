@@ -34,6 +34,8 @@ class Settings(BaseSettings):
         default_factory=lambda: os.getenv("HOME_ASSISTANT_URL"))
     HOME_ASSISTANT_TOKEN: Optional[str] = Field(
         default_factory=lambda: os.getenv("HOME_ASSISTANT_TOKEN"))
+    HOME_ASSISTANT_WEBHOOK_URL: Optional[str] = Field(
+        default_factory=lambda: os.getenv("HOME_ASSISTANT_WEBHOOK_URL"))
 
     # Redis
     REDIS_URL: str = Field(default_factory=lambda: os.getenv(

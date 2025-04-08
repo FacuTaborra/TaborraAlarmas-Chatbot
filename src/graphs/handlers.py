@@ -1,9 +1,12 @@
 """
 Handlers para cada nodo del grafo de conversación principal.
 """
-from typing import Dict, Any
-from langchain_core.messages import AIMessage, HumanMessage
 import traceback
+import uuid
+from typing import Dict, Any
+
+from langchain_core.messages import AIMessage, HumanMessage
+
 from src.graphs.troubleshooting import (
     confirmation_step,
     keyboard_selection,
@@ -12,6 +15,14 @@ from src.graphs.troubleshooting import (
     process_rating,
     exit_flow
 )
+
+from src.tools.home_assistant import HomeAssistantTools
+from src.core.database import Database
+from src.core.memory import RedisManager
+
+# Inicializar servicios
+db = Database()
+redis = RedisManager()
 
 
 def detect_intents(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -65,67 +76,6 @@ def handle_general_inquiry(state: Dict[str, Any]) -> Dict[str, Any]:
         return {**state, "messages": messages}
 
 
-def handle_alarm_status(state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Nodo para manejar consultas de estado de alarma (nivel 3)
-
-    Args:
-        state: Estado actual de la conversación
-
-    Returns:
-        Estado con la respuesta generada
-    """
-    messages = state["messages"]
-
-    # Simulación:
-    alarm_status = {
-        "Partición 1": "activada",
-        "Partición 2": "desactivada"
-    }
-
-    # Formatear respuesta
-    response = "📊 *Estado actual de la alarma:*\n\n"
-    for partition, status in alarm_status.items():
-        response += f"• {partition}: {status.upper()}\n"
-
-    # Añadir respuesta al historial
-    messages.append(AIMessage(content=response))
-
-    return {**state, "messages": messages}
-
-
-def handle_camera_scan(state: Dict[str, Any]) -> Dict[str, Any]:
-    messages = state["messages"]
-    user_level = state.get("user_level", 1)
-    business_info = state.get("business_info", {})
-
-    # Verificar si el usuario tiene nivel suficiente
-    if user_level < 3:
-        response = "⚠️ Lo siento, el escaneo de cámaras solo está disponible para usuarios de nivel VIP (Nivel 3).\n\n"
-        response += "Para obtener acceso a esta función, por favor contacta con nuestro servicio de ventas:\n"
-        response += f"📞 WhatsApp Ventas: {business_info.get('whatsapp_ventas', 'No disponible')}"
-    else:
-        # Lógica para obtener datos de cámaras (por ejemplo, desde Home Assistant)
-        camera_data = [
-            {"id": "camera.entrada_principal",
-                "name": "Entrada Principal", "state": "Grabando"},
-            {"id": "camera.patio_trasero",
-                "name": "Patio Trasero", "state": "Grabando"},
-            {"id": "camera.cocina", "name": "Cocina", "state": "Inactiva"}
-        ]
-
-        response = "📷 *Estado de las cámaras:*\n\n"
-        for camera in camera_data:
-            response += f"• {camera['name']}: {camera['state']}\n"
-
-        response += "\nEnviando imágenes de las cámaras activas..."
-
-    # Añadir respuesta al historial
-    messages.append(AIMessage(content=response))
-
-    return {**state, "messages": messages}
-
-
 def start_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Nodo para iniciar el flujo de resolución de problemas
@@ -148,7 +98,6 @@ def start_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
         "business_info": state["business_info"],
         "user_data": state.get("user_data", None)
     }
-    print(f"🔧 Iniciando flujo de troubleshooting: {troubleshooting_state}")
 
     return {
         **state,
@@ -309,6 +258,7 @@ def handle_access_denied(state: Dict[str, Any]) -> Dict[str, Any]:
 
     # Determinar qué tipo de acceso fue denegado
     denied_feature = ""
+    print("Control de alarma no permitido")
 
     if "estado_alarma" in intents:
         denied_feature = "consultar el estado de tu alarma"
@@ -330,6 +280,58 @@ def handle_access_denied(state: Dict[str, Any]) -> Dict[str, Any]:
     messages.append(AIMessage(content=response))
 
     return {**state, "messages": messages}
+
+
+# En src/graphs/handlers.py
+
+def handle_home_assistant_request(state: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Nodo para marcar que se necesita una acción de Home Assistant.
+    Este nodo no realiza operaciones asíncronas, solo prepara el estado.
+
+    Args:
+        state: Estado actual de la conversación
+
+    Returns:
+        Estado actualizado con información para Home Assistant
+    """
+    messages = state["messages"]
+    user_data = state.get("user_data", {})
+    intents = state.get("intents", [])
+
+    print(f"Intenciones para Home Assistant: {intents} usuario: {user_data}")
+
+    # Verificar nivel de usuario
+    if user_data.get("level", 1) < 3:
+        response = "⚠️ Lo siento, esta función solo está disponible para usuarios de nivel VIP (Nivel 3)."
+        messages.append(AIMessage(content=response))
+        return {**state, "messages": messages}
+
+    phone = user_data.get("phone")
+    user_id = user_data.get("id")
+
+    if not phone or not user_id:
+        messages.append(
+            AIMessage(content="⚠️ No se pudo identificar tu información de usuario."))
+        return {**state, "messages": messages}
+
+    # Agregar un mensaje genérico mientras procesamos
+    messages.append(
+        AIMessage(content="🔄 Procesando tu solicitud con Home Assistant, dame un momento..."))
+
+    # Marcar en el estado que se necesita una acción de Home Assistant
+    # Esto será procesado por el controlador después de que el grafo termine
+    return {
+        **state,
+        "messages": messages,
+        "requires_home_assistant": True,
+        "ha_request": {
+            "user_id": user_id,
+            "phone": phone,
+            "intents": intents,
+            "last_message": state["messages"][-2].content if len(state["messages"]) >= 2 else ""
+        }
+    }
 
 
 def finalize_response(state: Dict[str, Any]) -> Dict[str, Any]:

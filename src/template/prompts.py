@@ -1,14 +1,29 @@
 from langchain.prompts import ChatPromptTemplate
 
-# Template para el clasificador de intenciones
-INTENT_CLASSIFIER_TEMPLATE = """
+
+# aca van las intenciones de Home Assistant que tiene cada usuario
+INTENTS_HA = {
+    "estado_alarma": {
+        "description": "Consulta el estado de la alarma",
+    },
+    "escaneo_camara": {
+        "description": "Escanea las cámaras de seguridad",
+    },
+    "video_camara": {
+        "description": "Solicita un video de una cámara específica",
+    },
+    "imagen_camara": {
+        "description": "Solicita una imagen de una cámara específica",
+    }
+}
+
+# Template base para el clasificador de intenciones (sin las intenciones de HA)
+INTENT_CLASSIFIER_BASE_TEMPLATE = """
 Eres un asistente especializado en detectar intenciones en mensajes.
 A continuación, se te dará un mensaje del usuario y deberás identificar todas las intenciones presentes.
 
 Las posibles intenciones son:
-- estado_alarma: Si pregunta por el estado de la alarma o cómo está la alarma
-- escaneo_camaras: Si quiere ver las cámaras o detectar movimiento
-- control_alarma: Si el usuario quiere controlar su alarma (prender, apagar, desactivar, activar)
+- control_alarma: Si el usuario quiere controlar su alarma, es decir, cambiar algun estado. PRENDER, APAGAR, ANULAR, REINICIAR, ACTIVAR, DESACTIVAR.
 - direccion: Si pregunta dónde está ubicada la empresa o cómo llegar
 - horario: Si pregunta por los horarios de atención
 - email: Si solicita un correo electrónico de contacto
@@ -20,7 +35,7 @@ Las posibles intenciones son:
 - whatsapp_cobranza: Si quiere contactar con cobranzas o pagar
 - saludo: Si está saludando
 - despedida: Si se está despidiendo
-- problema_alarma: Si indica que tiene un problema con su alarma, o tiene una pregunta frecuente de la alarma (anular una zona, preguntas sobre su alarma, etc)
+- problema_alarma: Si indica que tiene un problema con su alarma, o tiene una pregunta frecuente de la alarma (como anular una zona, preguntas sobre su alarma, etc)
 
 Mensaje del usuario: {text}
 
@@ -80,8 +95,6 @@ Usa emojis relevantes y formato para facilitar la lectura.
 """
 
 # Crear los templates adicionales
-intent_classifier_prompt = ChatPromptTemplate.from_template(
-    INTENT_CLASSIFIER_TEMPLATE)
 general_response_prompt = ChatPromptTemplate.from_template(
     GENERAL_RESPONSE_TEMPLATE)
 alarm_status_prompt = ChatPromptTemplate.from_template(ALARM_STATUS_TEMPLATE)

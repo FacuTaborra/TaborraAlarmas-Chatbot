@@ -1,146 +1,100 @@
+# src/tools/home_assistant.py
 from typing import Dict, Any, Optional
 import aiohttp
 import json
+import uuid
 from src.config.settings import settings
 
 
 class HomeAssistantTools:
-    def __init__(self, url: Optional[str] = None, token: Optional[str] = None):
+    def __init__(self, webhook_url: Optional[str] = None, token: Optional[str] = None):
         """
-        Inicializa las herramientas para Home Assistant.
+        Inicializa la herramienta para comunicarse con Home Assistant vía webhook.
 
         Args:
-            url: URL base de Home Assistant
-            token: Token de acceso
+            webhook_url: URL del webhook configurado en Home Assistant del cliente
+            token: Token de autenticación para el webhook
         """
-        self.url = url or settings.HOME_ASSISTANT_URL
-        self.token = token or settings.HOME_ASSISTANT_TOKEN
+        self.webhook_url = webhook_url
+        self.token = token
 
-        if not self.url or not self.token:
-            print("⚠️ La integración con Home Assistant está deshabilitada")
+        if not self.webhook_url:
+            print("⚠️ No se ha configurado un webhook para Home Assistant")
             self.enabled = False
         else:
             self.enabled = True
-            self.headers = {
-                "Authorization": f"Bearer {self.token}",
-                "Content-Type": "application/json"
-            }
 
-    async def get_alarm_status(self) -> Dict[str, Any]:
+    async def call_webhook(self, method: str, phone: str, conversation_id: str = None, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Obtiene el estado de todas las particiones de alarma.
-
-        Returns:
-            Diccionario con el estado de cada partición o error
-        """
-        if not self.enabled:
-            return {"error": "La integración con Home Assistant está deshabilitada"}
-
-        template_url = f"{self.url}/api/template"
-        payload = {
-            "template": """
-            {% set entidades = states.binary_sensor | selectattr('entity_id', 'search', 'alarma_dsc_neo_casa_estado_armado_particion_') | list %}
-            {
-              {% for entidad in entidades %}
-                "{{ entidad.entity_id }}": "{{ entidad.state }}"{{ "," if not loop.last else "" }}
-              {% endfor %}
-            }
-            """
-        }
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(template_url, headers=self.headers, json=payload) as response:
-                    text_response = await response.text()
-
-                    if response.status == 200:
-                        try:
-                            data = json.loads(text_response)
-                            estados = {
-                                entidad.split(
-                                    '.')[-1]: "activada" if estado == "off" else "desactivada"
-                                for entidad, estado in data.items()
-                            }
-                            return estados
-                        except json.JSONDecodeError:
-                            return {
-                                "error": "La respuesta de Home Assistant no es un JSON válido",
-                                "detalle": text_response
-                            }
-                    else:
-                        return {
-                            "error": f"Error en la petición a Home Assistant (código {response.status})",
-                            "detalle": text_response
-                        }
-        except Exception as e:
-            return {"error": f"Error en la conexión con Home Assistant: {str(e)}"}
-
-    async def scan_cameras(self) -> Dict[str, Any]:
-        """
-        Obtiene información de todas las cámaras.
-
-        Returns:
-            Información de las cámaras o error
-        """
-        if not self.enabled:
-            return {"error": "La integración con Home Assistant está deshabilitada"}
-
-        template_url = f"{self.url}/api/template"
-        payload = {
-            "template": """
-            {% set camaras = states.camera | list %}
-            {
-              "camaras": [
-                {% for camara in camaras %}
-                  {
-                    "id": "{{ camara.entity_id }}",
-                    "name": "{{ camara.name }}",
-                    "state": "{{ camara.state }}"
-                  }{{ "," if not loop.last else "" }}
-                {% endfor %}
-              ]
-            }
-            """
-        }
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(template_url, headers=self.headers, json=payload) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data
-                    else:
-                        return {"error": f"Error en la petición a Home Assistant (código {response.status})"}
-        except Exception as e:
-            return {"error": f"Error al escanear cámaras: {str(e)}"}
-
-    async def get_camera_image(self, camera_entity_id: str) -> Optional[str]:
-        """
-        Obtiene la URL de la imagen de una cámara.
+        Llama al webhook de Home Assistant y procesa la respuesta.
 
         Args:
-            camera_entity_id: ID de la entidad de la cámara
+            method: Método o acción a ejecutar en Home Assistant
+            phone: Número de teléfono del usuario para respuesta
+            conversation_id: ID de la conversación para seguimiento
+            params: Parámetros adicionales para el método
 
         Returns:
-            URL de la imagen o None si hay error
+            Resultado de la llamada al webhook
         """
         if not self.enabled:
-            return None
+            return {"error": "No se ha configurado un webhook para Home Assistant"}
 
-        # Verificar si la cámara existe
-        state_url = f"{self.url}/api/states/{camera_entity_id}"
+        # Generar ID de conversación si no se proporcionó
+        if not conversation_id:
+            conversation_id = str(uuid.uuid4())
+
+        # Preparar el payload para el webhook
+        payload = {
+            "method": method,
+            "auth_token": self.token,
+            "phone": phone,
+            "conversation_id": conversation_id,
+            "callback_url": f"{settings.URL_SERVIDOR}/webhook/home_assistant_response"
+        }
+
+        # Añadir parámetros adicionales si existen
+        if params:
+            payload["params"] = params
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(state_url, headers=self.headers) as response:
+                async with session.post(
+                    self.webhook_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=10
+                ) as response:
+                    print(
+                        f"🔄 Llamando al webhook de Home Assistant: {self.webhook_url}, response: {response}")
                     if response.status == 200:
-                        # La cámara existe, retornar URL con timestamp para evitar cache
-                        import time
-                        camera_url = f"{self.url}/api/camera_proxy/{camera_entity_id}?t={int(time.time())}"
-                        return camera_url
+                        # Intentar obtener respuesta inmediata
+                        try:
+                            response_data = await response.json()
+
+                            # Verificar si hay resultados inmediatos
+                            if "results" in response_data or "text_message" in response_data or "image_url" in response_data:
+                                return {
+                                    "success": True,
+                                    "immediate_response": True,
+                                    "data": response_data
+                                }
+                            else:
+                                # No hay resultados inmediatos, esperar respuesta asíncrona
+                                return {
+                                    "success": True,
+                                    "immediate_response": False,
+                                    "message": "Solicitud enviada a Home Assistant, esperando respuesta asíncrona"
+                                }
+                        except Exception:
+                            # No se pudo parsear como JSON, asumimos que es sólo confirmación
+                            return {
+                                "success": True,
+                                "immediate_response": False,
+                                "message": "Solicitud enviada a Home Assistant"
+                            }
                     else:
-                        print(f"Error al verificar cámara: {response.status}")
-                        return None
+                        error_text = await response.text()
+                        return {"error": f"Error en la llamada al webhook (código {response.status}): {error_text}"}
         except Exception as e:
-            print(f"Error al obtener imagen de cámara: {str(e)}")
-            return None
+            return {"error": f"Error de conexión con Home Assistant: {str(e)}"}

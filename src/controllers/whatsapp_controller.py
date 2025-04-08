@@ -9,6 +9,8 @@ from src.utils.helpers import parse_whatsapp_payload
 from src.config.settings import settings
 from langchain_core.messages import HumanMessage, AIMessage
 from src.template.keyboard_types import KEYBOARD_TYPES, get_keyboard_image_url
+# Importar controlador de Home Assistant
+from src.controllers.home_assistant_controller import HomeAssistantController
 
 
 class WhatsAppController:
@@ -94,8 +96,21 @@ class WhatsAppController:
         # Obtener datos del usuario
         user_data = await self._get_or_create_user(phone_user, user_name)
 
+        ha_methods = {}
+        if user_data.get("level", 1) >= 3:
+            try:
+                # Obtener configuración de HA de la BD
+                ha_methods = await self.database.get_home_assistant_methods(user_data["id"])
+            except Exception as e:
+                print(f"❌ Error al cargar métodos de Home Assistant: {e}")
+
+        intent_classifier = IntentClassifier(
+            api_key=settings.OPENAI_API_KEY,
+            ha_methods=ha_methods
+        )
+
         # Clasificar intenciones
-        intents = await self.intent_classifier.predict(text_body)
+        intents = await intent_classifier.predict(text_body)
         print(f"🧠 Intenciones detectadas: {intents}")
 
         # Obtener historial de mensajes
@@ -137,7 +152,6 @@ class WhatsAppController:
 
         # Procesar con el grafo de conversación
         result = self.conversation_graph.invoke(state)
-
         # Extraer y enviar respuesta
         return await self._process_graph_result(result, user_data, chat_id)
 
@@ -160,7 +174,7 @@ class WhatsAppController:
             user_data = await self.database.get_user_by_phone(phone)
 
             if not user_data:
-                # Crear nuevo usuario
+             # Crear nuevo usuario
                 names = name.split(" ", 1)
                 first_name = names[0]
                 last_name = names[1] if len(names) > 1 else ""
@@ -226,6 +240,10 @@ class WhatsAppController:
         """
         final_messages = result.get("messages", [])
         rating_info = result.get("rating_info", None)
+
+        # Verificar si es necesario procesar una solicitud de Home Assistant
+        requires_ha = result.get("requires_home_assistant", False)
+        ha_request = result.get("ha_request", {})
 
         if not final_messages or not isinstance(final_messages[-1], AIMessage):
             return {"status": "No se generó respuesta"}
@@ -296,6 +314,38 @@ class WhatsAppController:
         else:
             # Envío normal de texto
             await self.whatsapp_service.split_and_send_message(user_data.get("phone"), response_message.content)
+
+        # Si se requiere Home Assistant, llamar al webhook
+        if requires_ha and ha_request:
+            try:
+                # Inicializar controlador
+                ha_controller = HomeAssistantController()
+                await ha_controller.initialize()
+
+                # Procesar solicitud
+                user_id = ha_request.get("user_id")
+                phone = ha_request.get("phone")
+                intents = ha_request.get("intents", [])
+
+                # Ver si las intenciones que tiene estan en la lista de Home Assistant
+
+                for intent in intents:
+                    # Enviar mensaje a Home Assistant
+                    response = await ha_controller.trigger_home_assistant(user_id, phone, intent)
+
+                    if response.get("success"):
+                        success_msg = f"✅ Método {intent} ejecutado correctamente en Home Assistant."
+                        print(success_msg)
+                        return {"status": success_msg}
+                    elif not response.get("success"):
+                        error_msg = f"⚠️ No tienes implementado el metodo {intent} en Home Assistant. Por Favor, comunicate con nuestro servicio técnico si quieres mas infomación."
+                        print(f"❌ Error: {response.get('message')}")
+                        await self.whatsapp_service.send_message(phone, response.get('message'))
+
+            except Exception as e:
+                print(f"❌ Error al procesar solicitud de Home Assistant: {e}")
+                error_msg = "⚠️ Ocurrió un error al procesar tu solicitud a Home Assistant. Por favor, intenta más tarde."
+                raise ValueError(error_msg)
 
         # Verificar si hay una calificación para guardar
         if rating_info and rating_info.get("rating") is not None:

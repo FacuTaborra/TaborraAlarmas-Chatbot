@@ -2,6 +2,7 @@ import asyncmy
 # Removed unnecessary import of asyncmy.cursors
 from typing import Dict, Any, Optional, List, Tuple
 from src.config.settings import settings
+import json
 
 
 class Database:
@@ -393,3 +394,84 @@ class Database:
         except Exception as e:
             print(f"❌ Error al obtener conversaciones del usuario: {e}")
             return []
+
+    # Añadir a src/core/database.py
+
+    # En src/core/database.py
+
+    async def get_home_assistant_config(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene la configuración de Home Assistant para un usuario.
+
+        Args:
+            user_id: ID del usuario
+
+        Returns:
+            Configuración de Home Assistant o None si no existe
+        """
+        await self.connect()
+        query = """
+        SELECT webhook_url, token, available_methods 
+        FROM home_assistant_config 
+        WHERE user_id = %s
+        """
+
+        try:
+            async with self.read_pool.acquire() as conn:
+                async with conn.cursor(asyncmy.cursors.DictCursor) as cursor:
+                    await cursor.execute(query, (user_id,))
+                    result = await cursor.fetchone()
+
+                    if result and "available_methods" in result and result["available_methods"]:
+                        # Convertir JSON a dict
+                        try:
+                            if isinstance(result["available_methods"], str):
+                                result["available_methods"] = json.loads(
+                                    result["available_methods"])
+                        except Exception as e:
+                            print(
+                                f"❌ Error al parsear available_methods: {result['available_methods']}. Detalle del error: {e}")
+                            result["available_methods"] = {}
+
+                    return result
+        except Exception as e:
+            print(f"❌ Error al obtener configuración de Home Assistant: {e}")
+            return None
+
+    async def get_home_assistant_methods(self, user_id: int) -> Dict[str, Any]:
+        """
+        Obtiene solo los métodos disponibles de Home Assistant para un usuario.
+
+        Args:
+            user_id: ID del usuario
+
+        Returns:
+            Diccionario con los métodos disponibles o diccionario vacío si no hay
+        """
+        await self.connect()
+        query = """
+        SELECT available_methods 
+        FROM home_assistant_config 
+        WHERE user_id = %s
+        """
+
+        try:
+            async with self.read_pool.acquire() as conn:
+                async with conn.cursor(asyncmy.cursors.DictCursor) as cursor:
+                    await cursor.execute(query, (user_id,))
+                    result = await cursor.fetchone()
+
+                    if result and "available_methods" in result and result["available_methods"]:
+                        # Convertir JSON a dict
+                        try:
+                            if isinstance(result["available_methods"], str):
+                                return json.loads(result["available_methods"])
+                            return result["available_methods"]
+                        except Exception as e:
+                            print(f"❌ Error al parsear available_methods: {e}")
+                            return {}
+
+                    return {}
+        except Exception as e:
+            print(f"❌ Error al obtener métodos de Home Assistant: {e}")
+            return {}

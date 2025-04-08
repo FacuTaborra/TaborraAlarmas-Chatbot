@@ -7,8 +7,7 @@ from langgraph.graph import StateGraph
 from src.graphs.handlers import (
     detect_intents,
     handle_general_inquiry,
-    handle_alarm_status,
-    handle_camera_scan,
+    handle_home_assistant_request,
     start_troubleshooting,
     process_troubleshooting,
     handle_general_response,
@@ -30,6 +29,8 @@ class ConversationState(TypedDict):
     troubleshooting_active: bool
     troubleshooting_state: Optional[Dict[str, Any]]
     rating_info: Optional[Dict[str, Any]]
+    requires_home_assistant: Optional[bool]
+    ha_request: Optional[Dict[str, Any]]
 
 
 def create_conversation_graph():
@@ -45,8 +46,8 @@ def create_conversation_graph():
     # Añadir nodos
     conversation_graph.add_node("DETECT_INTENTS", detect_intents)
     conversation_graph.add_node("GENERAL_INQUIRY", handle_general_inquiry)
-    conversation_graph.add_node("ALARM_STATUS", handle_alarm_status)
-    conversation_graph.add_node("CAMERA_SCAN", handle_camera_scan)
+    conversation_graph.add_node(
+        "HOME_ASSISTANT_REQUEST", handle_home_assistant_request)
     conversation_graph.add_node("START_TROUBLESHOOTING", start_troubleshooting)
     conversation_graph.add_node("TROUBLESHOOTING", process_troubleshooting)
     conversation_graph.add_node("GENERAL_RESPONSE", handle_general_response)
@@ -59,8 +60,7 @@ def create_conversation_graph():
         route_main_conversation,
         {
             "GENERAL_INQUIRY": "GENERAL_INQUIRY",
-            "ALARM_STATUS": "ALARM_STATUS",
-            "CAMERA_SCAN": "CAMERA_SCAN",
+            "HOME_ASSISTANT_REQUEST": "HOME_ASSISTANT_REQUEST",
             "START_TROUBLESHOOTING": "START_TROUBLESHOOTING",
             "TROUBLESHOOTING": "TROUBLESHOOTING",
             "GENERAL_RESPONSE": "GENERAL_RESPONSE",
@@ -73,8 +73,7 @@ def create_conversation_graph():
 
     # Todos los nodos finalizan en el nodo FINAL
     conversation_graph.add_edge("GENERAL_INQUIRY", "FINAL")
-    conversation_graph.add_edge("ALARM_STATUS", "FINAL")
-    conversation_graph.add_edge("CAMERA_SCAN", "FINAL")
+    conversation_graph.add_edge("HOME_ASSISTANT_REQUEST", "FINAL")
     conversation_graph.add_edge("TROUBLESHOOTING", "FINAL")
     conversation_graph.add_edge("GENERAL_RESPONSE", "FINAL")
     conversation_graph.add_edge("ACCESS_DENIED", "FINAL")

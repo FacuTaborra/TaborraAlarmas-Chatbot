@@ -16,8 +16,18 @@ def route_main_conversation(state: Dict[str, Any]) -> str:
     Returns:
         Nombre del nodo al que dirigir el flujo
     """
+    # Intenciones generales de información para cualquier nivel
+    general_intents = ["direccion", "horario", "email", "telefono1", "telefono2", "telefono3", "whatsapp",
+                       "whatsapp_servicio_tecnico", "whatsapp_ventas",
+                       "whatsapp_administracion", "whatsapp_cobranza",
+                       "security", "saludo", "despedida"]
+
     intents = state["intents"]
     user_level = state["user_level"]
+
+    # Intenciones de información general
+    if any(intent in intents for intent in general_intents):
+        return "GENERAL_INQUIRY"
 
     # Si hay un estado de troubleshooting activo, continuar con él
     if state.get("troubleshooting_active", False):
@@ -30,32 +40,13 @@ def route_main_conversation(state: Dict[str, Any]) -> str:
         # Si no tiene nivel 2+, podría redirigir a una respuesta general
         return "ACCESS_DENIED"
 
-    # Estado de alarma para nivel 3
-    if "estado_alarma" in intents and user_level >= 3:
-        return "ALARM_STATUS"
-    elif "estado_alarma" in intents:
-        # Si no tiene nivel 3, podría redirigir a una respuesta general
-        return "ACCESS_DENIED"
-
-    # Escaneo de cámaras para nivel 3
-    if "escaneo_camaras" in intents and user_level >= 3:
-        return "CAMERA_SCAN"
-    elif "escaneo_camaras" in intents:
-        # Si no tiene nivel 3, podría redirigir a una respuesta general
-        return "ACCESS_DENIED"
-
-    # Control de alarma, no permitido para ningun nivel
+    # Control de alarma, no permitido para ningún nivel
     if "control_alarma" in intents:
         return "ACCESS_DENIED"
 
-    # Intenciones generales de información para cualquier nivel
-    general_intents = ["direccion", "horario", "email", "telefono1", "telefono2", "telefono3", "whatsapp",
-                       "whatsapp_servicio_tecnico", "whatsapp_ventas",
-                       "whatsapp_administracion", "whatsapp_cobranza",
-                       "security", "saludo", "despedida", "control_alarma"]
-
-    if any(intent in intents for intent in general_intents):
-        return "GENERAL_INQUIRY"
+    # Para usuarios nivel 3, intentar Home Assistant
+    if user_level >= 3 and intents:
+        return "HOME_ASSISTANT_REQUEST"
 
     # Default: manejo cuando no se detecta intencion
     return "GENERAL_RESPONSE"
