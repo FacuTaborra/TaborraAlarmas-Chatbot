@@ -1,8 +1,9 @@
-import asyncmy
-# Removed unnecessary import of asyncmy.cursors
-from typing import Dict, Any, Optional, List, Tuple
-from src.config.settings import settings
 import json
+import secrets
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, List, Tuple
+import asyncmy
+from src.config.settings import settings
 
 
 class Database:
@@ -475,3 +476,104 @@ class Database:
         except Exception as e:
             print(f"❌ Error al obtener métodos de Home Assistant: {e}")
             return {}
+
+    async def generate_ha_webhook_token(self, user_id: int) -> str:
+        """
+        Genera un nuevo token de webhook para Home Assistant
+
+        Args:
+            user_id: ID del usuario
+
+        Returns:
+            Token generado
+        """
+        # Generar token seguro
+        token = secrets.token_urlsafe(32)
+
+        # Guardar en base de datos
+        query = """
+        INSERT INTO home_assistant_config 
+        (user_id, webhook_token, token_generated_at, is_verified) 
+        VALUES (%s, %s, NOW(), FALSE)
+        ON DUPLICATE KEY UPDATE 
+        webhook_token = %s, 
+        token_generated_at = NOW(), 
+        is_verified = FALSE
+        """
+
+        async with self.write_pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                try:
+                    await cursor.execute(query, (user_id, token, token))
+                    await conn.commit()
+                    return token
+                except Exception as e:
+                    await conn.rollback()
+                    print(f"❌ Error al generar token: {e}")
+                    return None
+
+    async def verify_ha_webhook_token(self, user_id: int, token: str) -> bool:
+        """
+        Verifica el token de webhook para un usuario
+
+        Args:
+            user_id: ID del usuario
+            token: Token a verificar
+
+        Returns:
+            True si el token es válido, False en caso contrario
+        """
+        query = """
+        SELECT webhook_token, token_generated_at 
+        FROM home_assistant_config 
+        WHERE user_id = %s AND webhook_token = %s AND is_verified = FALSE
+        """
+
+        async with self.read_pool.acquire() as conn:
+            async with conn.cursor(asyncmy.cursors.DictCursor) as cursor:
+                await cursor.execute(query, (user_id, token))
+                result = await cursor.fetchone()
+
+                if not result:
+                    return False
+
+                # Token válido por 24 horas
+                token_age = datetime.now() - result['token_generated_at']
+                if token_age > timedelta(hours=24):
+                    return False
+
+                # Marcar como verificado
+                update_query = """
+                UPDATE home_assistant_config 
+                SET is_verified = TRUE 
+                WHERE user_id = %s
+                """
+
+                async with self.write_pool.acquire() as conn:
+                    async with conn.cursor() as cursor:
+                        await cursor.execute(update_query, (user_id,))
+                        await conn.commit()
+
+                return True
+
+    async def verify_auth_token(self, token: str) -> Optional[Dict[str, Any]]:
+        """
+        Verifica un token de autenticación y devuelve los datos del usuario.
+
+        Args:
+            token: Token de autenticación a verificar
+
+        Returns:
+            Datos del usuario si el token es válido, None en caso contrario
+        """
+        query = """
+        SELECT u.id, u.first_name, u.last_name, u.phone, u.level
+        FROM users u
+        JOIN user_tokens ut ON u.id = ut.user_id
+        WHERE ut.token = %s AND ut.expires_at > NOW()
+        """
+
+        async with self.read_pool.acquire() as conn:
+            async with conn.cursor(asyncmy.cursors.DictCursor) as cursor:
+                await cursor.execute(query, (token,))
+                return await cursor.fetchone()

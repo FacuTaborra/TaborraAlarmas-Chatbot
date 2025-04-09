@@ -47,10 +47,8 @@ class HomeAssistantTools:
         # Preparar el payload para el webhook
         payload = {
             "method": method,
-            "auth_token": self.token,
             "phone": phone,
             "conversation_id": conversation_id,
-            "callback_url": f"{settings.URL_SERVIDOR}/webhook/home_assistant_response"
         }
 
         # Añadir parámetros adicionales si existen
@@ -61,40 +59,33 @@ class HomeAssistantTools:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     self.webhook_url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                    timeout=10
+                    headers={
+                        "Authorization": f"Bearer {self.token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
                 ) as response:
-                    print(
-                        f"🔄 Llamando al webhook de Home Assistant: {self.webhook_url}, response: {response}")
+                    text = await response.text()
+                    print(f"Respuesta del webhook HA: {text}")
                     if response.status == 200:
-                        # Intentar obtener respuesta inmediata
                         try:
+                            # Siempre intentar obtener el JSON
                             response_data = await response.json()
-
-                            # Verificar si hay resultados inmediatos
-                            if "results" in response_data or "text_message" in response_data or "image_url" in response_data:
-                                return {
-                                    "success": True,
-                                    "immediate_response": True,
-                                    "data": response_data
-                                }
-                            else:
-                                # No hay resultados inmediatos, esperar respuesta asíncrona
-                                return {
-                                    "success": True,
-                                    "immediate_response": False,
-                                    "message": "Solicitud enviada a Home Assistant, esperando respuesta asíncrona"
-                                }
-                        except Exception:
-                            # No se pudo parsear como JSON, asumimos que es sólo confirmación
+                            print(f"Respuesta del webhook HA: {response_data}")
                             return {
                                 "success": True,
-                                "immediate_response": False,
-                                "message": "Solicitud enviada a Home Assistant"
+                                "data": response_data
+                            }
+                        except Exception:
+                            # Si no hay JSON, devolver éxito sin datos
+                            return {
+                                "success": True,
+                                "message": "Solicitud enviada exitosamente"
                             }
                     else:
                         error_text = await response.text()
-                        return {"error": f"Error en la llamada al webhook (código {response.status}): {error_text}"}
+                        return {
+                            "error": f"Error en la llamada al webhook (código {response.status}): {error_text}"
+                        }
         except Exception as e:
             return {"error": f"Error de conexión con Home Assistant: {str(e)}"}

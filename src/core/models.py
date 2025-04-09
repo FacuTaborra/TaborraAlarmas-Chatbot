@@ -1,4 +1,5 @@
 from typing import Dict, Any, List, Optional, TypedDict
+from datetime import datetime
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
@@ -63,3 +64,13 @@ class KeyboardType(BaseModel):
     problems: Dict[str, KeyboardProblem]
     direct_support: bool = False
     support_message: Optional[str] = None
+
+
+class HomeAssistantConfig(BaseModel):
+    """Modelo para configuración de Home Assistant por usuario"""
+    id: Optional[int] = None
+    user_id: int
+    webhook_url: Optional[str] = None
+    webhook_token: Optional[str] = None
+    token_generated_at: Optional[datetime] = None
+    is_verified: bool = False

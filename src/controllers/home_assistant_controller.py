@@ -72,7 +72,6 @@ class HomeAssistantController:
         # Verificar si el método está disponible
         # ha_config.get("available_methods", [])
         available_methods = list(ha_config['available_methods'].keys())
-        print(f"🔍 Métodos disponibles: {available_methods}")
         if not available_methods:
             return {"success": False, "message": "No hay métodos disponibles en tu configuración de Home Assistant. Por Favor, contactate con nuestro equipo de soporte tecnico para mas información"}
 
@@ -80,8 +79,10 @@ class HomeAssistantController:
             return {"success": False, "message": f"El método '{method}' no esta disponible en la configuración de Home Assistant. Por Favor, contactate con nuestro equipo de soporte tecnico para mas información"}
 
         # Crear instancia de herramienta de Home Assistant
+        url = f"{ha_config["webhook_url"]}/api/webhook/activar_{method}"
+        print(f"🔗 Llamando al webhook de Home Assistant: {url}")
         ha_tools = HomeAssistantTools(
-            webhook_url=ha_config["webhook_url"],
+            webhook_url=url,
             token=ha_config["token"]
         )
 
@@ -314,3 +315,46 @@ class HomeAssistantController:
         Cierra las conexiones utilizadas.
         """
         await self.database.close()
+
+    async def generate_webhook_token(self, user_id: int) -> Dict[str, Any]:
+        """
+        Genera un nuevo token de webhook para Home Assistant
+
+        Args:
+            user_id: ID del usuario
+
+        Returns:
+            Diccionario con información del token
+        """
+        try:
+            # Generar token usando el método que ya implementaste en la base de datos
+            token = await self.database.generate_ha_webhook_token(user_id)
+
+            return {
+                "success": True,
+                "token": token,
+                "message": "Token generado. Configura este token en tu Home Assistant."
+            }
+        except Exception as e:
+            print(f"❌ Error al generar token de webhook: {e}")
+            return {
+                "success": False,
+                "message": "No se pudo generar el token"
+            }
+
+    async def verify_webhook_token(self, user_id: int, token: str) -> bool:
+        """
+        Verifica el token de webhook para un usuario
+
+        Args:
+            user_id: ID del usuario
+            token: Token a verificar
+
+        Returns:
+            True si el token es válido, False en caso contrario
+        """
+        try:
+            return await self.database.verify_ha_webhook_token(user_id, token)
+        except Exception as e:
+            print(f"❌ Error al verificar token de webhook: {e}")
+            return False
