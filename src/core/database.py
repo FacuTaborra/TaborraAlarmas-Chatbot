@@ -477,103 +477,86 @@ class Database:
             print(f"❌ Error al obtener métodos de Home Assistant: {e}")
             return {}
 
-    async def generate_ha_webhook_token(self, user_id: int) -> str:
+    async def create_temp_ha_token(self, conversation_id: int, expiry_minutes: int = 10) -> str:
         """
-        Genera un nuevo token de webhook para Home Assistant
+        Crea un token temporal para callback de Home Assistant
 
         Args:
-            user_id: ID del usuario
+            conversation_id: ID de la conversación (de la tabla conversations)
+            expiry_minutes: Minutos hasta expiración
 
         Returns:
             Token generado
         """
-        # Generar token seguro
         token = secrets.token_urlsafe(32)
+        expires_at = (datetime.now() + timedelta(minutes=expiry_minutes)
+                      ).strftime('%Y-%m-%d %H:%M:%S')
 
-        # Guardar en base de datos
+        await self.connect()
         query = """
-        INSERT INTO home_assistant_config 
-        (user_id, webhook_token, token_generated_at, is_verified) 
-        VALUES (%s, %s, NOW(), FALSE)
-        ON DUPLICATE KEY UPDATE 
-        webhook_token = %s, 
-        token_generated_at = NOW(), 
-        is_verified = FALSE
+        INSERT INTO ha_callback_tokens
+        (token, conversation_id, expires_at)
+        VALUES (%s, %s, %s)
         """
 
         async with self.write_pool.acquire() as conn:
             async with conn.cursor() as cursor:
                 try:
-                    await cursor.execute(query, (user_id, token, token))
+                    await cursor.execute(query, (token, conversation_id, expires_at))
                     await conn.commit()
                     return token
                 except Exception as e:
                     await conn.rollback()
-                    print(f"❌ Error al generar token: {e}")
+                    print(f"❌ Error al crear token temporal: {e}")
                     return None
 
-    async def verify_ha_webhook_token(self, user_id: int, token: str) -> bool:
+    async def verify_and_use_temp_ha_token(self, token: str, conversation_id: int) -> Optional[int]:
         """
-        Verifica el token de webhook para un usuario
+        Verifica un token temporal, lo marca como usado y devuelve el user_id
 
         Args:
-            user_id: ID del usuario
             token: Token a verificar
+            conversation_id: ID de la conversación
 
         Returns:
-            True si el token es válido, False en caso contrario
+            ID del usuario o None si el token es inválido
         """
+        await self.connect()
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         query = """
-        SELECT webhook_token, token_generated_at 
-        FROM home_assistant_config 
-        WHERE user_id = %s AND webhook_token = %s AND is_verified = FALSE
+        SELECT c.user_id 
+        FROM ha_callback_tokens t
+        JOIN conversations c ON t.conversation_id = c.id
+        WHERE t.token = %s 
+        AND t.conversation_id = %s 
+        AND t.expires_at > %s 
+        AND t.used = FALSE
         """
 
-        async with self.read_pool.acquire() as conn:
-            async with conn.cursor(asyncmy.cursors.DictCursor) as cursor:
-                await cursor.execute(query, (user_id, token))
-                result = await cursor.fetchone()
+        try:
+            async with self.read_pool.acquire() as conn:
+                async with conn.cursor() as cursor:
+                    await cursor.execute(query, (token, conversation_id, current_time))
+                    result = await cursor.fetchone()
 
-                if not result:
-                    return False
+                    if not result:
+                        return None
 
-                # Token válido por 24 horas
-                token_age = datetime.now() - result['token_generated_at']
-                if token_age > timedelta(hours=24):
-                    return False
+                    user_id = result[0]
 
-                # Marcar como verificado
-                update_query = """
-                UPDATE home_assistant_config 
-                SET is_verified = TRUE 
-                WHERE user_id = %s
-                """
+                    # Marcar token como usado
+                    update_query = """
+                    UPDATE ha_callback_tokens SET used = TRUE
+                    WHERE token = %s AND conversation_id = %s
+                    """
 
-                async with self.write_pool.acquire() as conn:
-                    async with conn.cursor() as cursor:
-                        await cursor.execute(update_query, (user_id,))
-                        await conn.commit()
+                    async with self.write_pool.acquire() as conn2:
+                        async with conn2.cursor() as cursor2:
+                            await cursor2.execute(update_query, (token, conversation_id))
+                            await conn2.commit()
 
-                return True
-
-    async def verify_auth_token(self, token: str) -> Optional[Dict[str, Any]]:
-        """
-        Verifica un token de autenticación y devuelve los datos del usuario.
-
-        Args:
-            token: Token de autenticación a verificar
-
-        Returns:
-            Datos del usuario si el token es válido, None en caso contrario
-        """
-        query = """
-        SELECT u.id, u.first_name, u.last_name, u.phone, u.level
-        FROM users u
-        JOIN user_tokens ut ON u.id = ut.user_id
-        WHERE ut.token = %s AND ut.expires_at > NOW()
-        """
-
-        async with self.read_pool.acquire() as conn:
-            async with conn.cursor(asyncmy.cursors.DictCursor) as cursor:
-                await cursor.execute(query, (token,))
-                return await cursor.fetchone()
+                    return user_id
+        except Exception as e:
+            print(f"❌ Error al verificar token temporal: {e}")
+        return None

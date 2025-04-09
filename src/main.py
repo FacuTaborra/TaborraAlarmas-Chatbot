@@ -5,12 +5,11 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from src.config.settings import Settings
 
 # Importar componentes
 from src.core.database import Database
 from src.core.memory import RedisManager
-from src.routes import whatsapp_routes, image_routes
+from src.routes import whatsapp_routes, home_assistant_routes
 from pathlib import Path
 
 
@@ -51,7 +50,8 @@ app.mount("/teclados", StaticFiles(directory=teclados_dir), name="teclados")
 
 app.include_router(whatsapp_routes.router,
                    prefix="/webhook", tags=["WhatsApp"])
-app.include_router(image_routes.router, prefix="/webhook", tags=["Images"])
+app.include_router(home_assistant_routes.router,
+                   prefix="/webhook", tags=["Home Assistant"])
 
 
 @app.get("/")

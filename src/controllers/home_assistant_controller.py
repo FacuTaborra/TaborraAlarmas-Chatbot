@@ -1,11 +1,13 @@
 # src/controllers/home_assistant_controller.py
 from typing import Dict, Any, Optional, List
+import traceback
 import json
 import uuid
 from src.tools.whatsapp import WhatsAppService
 from src.core.memory import RedisManager
 from src.core.database import Database
 from src.tools.home_assistant import HomeAssistantTools
+from src.config import settings
 
 
 class HomeAssistantController:
@@ -78,6 +80,20 @@ class HomeAssistantController:
         if method not in available_methods:
             return {"success": False, "message": f"El método '{method}' no esta disponible en la configuración de Home Assistant. Por Favor, contactate con nuestro equipo de soporte tecnico para mas información"}
 
+        # Obtener chat_id y conversation_id existente para este usuario
+        chat_id = await self.redis_manager.get_or_create_chat_id(phone)
+        conversation_id = await self.database.find_active_conversation(user_id, chat_id)
+
+        # Si no hay conversación activa, crear una
+        if not conversation_id:
+            conversation_id = await self.database.create_conversation(user_id, chat_id)
+            if not conversation_id:
+                return {"success": False, "message": "No se pudo crear una conversación para el usuario."}
+
+        callback_token = await self.database.create_temp_ha_token(conversation_id)
+        if not callback_token:
+            return {"success": False, "message": "No se pudo generar un token temporal."}
+
         # Crear instancia de herramienta de Home Assistant
         url = f"{ha_config["webhook_url"]}/api/webhook/activar_{method}"
         print(f"🔗 Llamando al webhook de Home Assistant: {url}")
@@ -86,14 +102,24 @@ class HomeAssistantController:
             token=ha_config["token"]
         )
 
-        # Generar ID de conversación
-        conversation_id = str(uuid.uuid4())
+        # Añadir el token temporal y URL de callback a los parámetros
+        url = f"{settings.URL_SERVIDOR}/webhook/home_assistant_response"
+        print(
+            f"🔗 URL de callback: {url}, callback_token: {callback_token}, conversation: {conversation_id}")
+        callback_params = {
+            "callback_token": callback_token,
+            "conversation_id": conversation_id,
+            "callback_url": f"{settings.URL_SERVIDOR}/webhook/home_assistant_response",
+            "phone": phone
+        }
+        # Combinar con los parámetros existentes
+        if params:
+            callback_params.update(params)
 
         # Llamar al webhook
         result = await ha_tools.call_webhook(
             method=method,
-            phone=phone,
-            conversation_id=conversation_id,
+            params=callback_params
         )
 
         return result
@@ -112,12 +138,7 @@ class HomeAssistantController:
         try:
             print(f"📥 Respuesta de Home Assistant recibida: {data}")
 
-            # Validar datos necesarios
-            if not ("phone" in data and "conversation_id" in data):
-                return {"success": False, "message": "Faltan datos requeridos (phone o conversation_id)"}
-
             phone = data.get("phone")
-            conversation_id = data.get("conversation_id")
 
             # Procesar el mensaje según su tipo
             if "text_message" in data:
@@ -127,43 +148,18 @@ class HomeAssistantController:
                 # Actualizar historial
                 await self._update_conversation_history(phone, data["text_message"])
 
-            elif "image_url" in data:
-                # Enviar imagen
-                caption = data.get("caption", "")
-                await self.whatsapp_service.send_image(phone, data["image_url"], caption)
+            if "images_url" in data:
+                for image_url in data["images_url"]:
+                    # Enviar imágenes
+                    await self.whatsapp_service.send_image(phone, image_url)
+                    # Actualizar historial
+                    await self._update_conversation_history(phone, image_url)
 
+            if "video_url" in data:
+                # Enviar video, falta implementar
+                await self.whatsapp_service.send_message(phone, data["video_url"])
                 # Actualizar historial
-                message = "📸 [Imagen enviada]" + \
-                    (f": {caption}" if caption else "")
-                await self._update_conversation_history(phone, message)
-
-            elif "results" in data:
-                # Resultados estructurados - convertir a texto legible
-                method = data.get("method", "")
-                formatted_message = self._format_results(
-                    data["results"], method)
-                await self.whatsapp_service.send_message(phone, formatted_message)
-
-                # Actualizar historial
-                await self._update_conversation_history(phone, formatted_message)
-
-            elif "error" in data:
-                # Error en la ejecución
-                error_message = f"⚠️ Error: {data['error']}"
-                await self.whatsapp_service.send_message(phone, error_message)
-
-                # Actualizar historial
-                await self._update_conversation_history(phone, error_message)
-
-            else:
-                # Formato desconocido
-                default_message = "Se ha recibido una respuesta de tu sistema, pero no pudo ser procesada correctamente."
-                await self.whatsapp_service.send_message(phone, default_message)
-
-                # Actualizar historial
-                await self._update_conversation_history(phone, default_message)
-
-            return {"success": True, "message": "Respuesta procesada correctamente"}
+                await self._update_conversation_history(phone, data["video_url"])
 
         except Exception as e:
             print(f"❌ Error al procesar respuesta de Home Assistant: {e}")
@@ -315,46 +311,3 @@ class HomeAssistantController:
         Cierra las conexiones utilizadas.
         """
         await self.database.close()
-
-    async def generate_webhook_token(self, user_id: int) -> Dict[str, Any]:
-        """
-        Genera un nuevo token de webhook para Home Assistant
-
-        Args:
-            user_id: ID del usuario
-
-        Returns:
-            Diccionario con información del token
-        """
-        try:
-            # Generar token usando el método que ya implementaste en la base de datos
-            token = await self.database.generate_ha_webhook_token(user_id)
-
-            return {
-                "success": True,
-                "token": token,
-                "message": "Token generado. Configura este token en tu Home Assistant."
-            }
-        except Exception as e:
-            print(f"❌ Error al generar token de webhook: {e}")
-            return {
-                "success": False,
-                "message": "No se pudo generar el token"
-            }
-
-    async def verify_webhook_token(self, user_id: int, token: str) -> bool:
-        """
-        Verifica el token de webhook para un usuario
-
-        Args:
-            user_id: ID del usuario
-            token: Token a verificar
-
-        Returns:
-            True si el token es válido, False en caso contrario
-        """
-        try:
-            return await self.database.verify_ha_webhook_token(user_id, token)
-        except Exception as e:
-            print(f"❌ Error al verificar token de webhook: {e}")
-            return False

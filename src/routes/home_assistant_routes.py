@@ -1,7 +1,10 @@
 # src/routes/home_assistant_routes.py
-from fastapi import APIRouter, Request, HTTPException, Depends, Body, Header
+from fastapi import APIRouter, Request, HTTPException, Depends, Body
+import json
+import traceback
 from typing import Dict, Any
 from src.controllers.home_assistant_controller import HomeAssistantController
+from src.core.database import Database
 
 router = APIRouter()
 
@@ -17,39 +20,58 @@ async def get_controller():
         await controller.close()
 
 
+async def get_database():
+    database = Database()
+    await database.connect()
+    try:
+        yield database
+    finally:
+        await database.close()
+
+
 @router.post("/home_assistant_response")
 async def process_home_assistant_response(
     request: Request,
-    controller: HomeAssistantController = Depends(get_controller)
+    controller: HomeAssistantController = Depends(get_controller),
+    database: Database = Depends(get_database)
 ):
     """
-    Procesa la respuesta de Home Assistant con verificación de token
+    Procesa la respuesta de Home Assistant con verificación de token temporal
     """
     try:
         data = await request.json()
+        print(f"📥 Recibiendo respuesta de Home Assistant: {data}")
 
-        # Verificar token
-        user_id = data.get('user_id')
-        token = data.get('token')
+        # Verificar datos básicos necesarios
+        callback_token = data.get('callback_token')
+        conversation_id = data.get('conversation_id')
+        phone = data.get('phone')
 
-        if not user_id or not token:
-            raise HTTPException(
-                status_code=400, detail="Faltan datos de autenticación")
+        if not callback_token or not conversation_id or not phone:
+            error_msg = "Faltan datos requeridos (token, ID de conversación o teléfono)"
+            print(f"⚠️ {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
 
-        # Verificar token usando el controlador
-        is_valid = await controller.verify_webhook_token(user_id, token)
+        if not database.verify_and_use_temp_ha_token(callback_token, conversation_id):
+            # Si el token no es válido, retornar error
+            error_msg = "Token de callback inválido"
+            print(f"⚠️ {error_msg}")
+            raise HTTPException(status_code=403, detail=error_msg)
 
-        if not is_valid:
-            raise HTTPException(
-                status_code=403, detail="Token inválido o expirado")
-
-        # Procesar webhook normalmente
+        # Procesar la respuesta
         result = await controller.process_response(data)
 
         return result
 
+    except json.JSONDecodeError:
+        error_msg = "Error al decodificar JSON de la solicitud"
+        print(f"❌ {error_msg}")
+        raise HTTPException(status_code=400, detail=error_msg)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        error_msg = f"Error al procesar respuesta: {str(e)}"
+        print(f"❌ {error_msg}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.post("/trigger_home_assistant")

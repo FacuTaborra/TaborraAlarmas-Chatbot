@@ -24,7 +24,7 @@ class HomeAssistantTools:
         else:
             self.enabled = True
 
-    async def call_webhook(self, method: str, phone: str, conversation_id: str = None, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def call_webhook(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         Llama al webhook de Home Assistant y procesa la respuesta.
 
@@ -40,15 +40,13 @@ class HomeAssistantTools:
         if not self.enabled:
             return {"error": "No se ha configurado un webhook para Home Assistant"}
 
-        # Generar ID de conversación si no se proporcionó
-        if not conversation_id:
-            conversation_id = str(uuid.uuid4())
-
         # Preparar el payload para el webhook
         payload = {
             "method": method,
-            "phone": phone,
-            "conversation_id": conversation_id,
+            "phone": params.get("phone"),
+            "conversation_id": params.get("conversation_id"),
+            "callback_token": params.get("callback_token"),
+            "callback_url": params.get("callback_url"),
         }
 
         # Añadir parámetros adicionales si existen
