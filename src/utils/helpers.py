@@ -1,9 +1,6 @@
 # src/utils/helpers.py
 import unicodedata
 from typing import Dict, Any
-from fastapi import Request, HTTPException
-from src.core.database import Database
-from src.core.memory import RedisManager
 
 
 def normalize_phone(phone: str) -> str:
@@ -106,44 +103,3 @@ def parse_whatsapp_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         print(f"❌ Error al procesar payload de WhatsApp: {e}")
         return {"success": False}
-
-
-async def get_current_user(request: Request) -> dict:
-    """
-    Obtiene el usuario actual basado en el token de autenticación.
-
-    Args:
-        request: Solicitud HTTP actual
-
-    Returns:
-        Diccionario con información del usuario
-    """
-    # Extraer token del encabezado de autorización
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        raise HTTPException(
-            status_code=401, detail="Token de autenticación no proporcionado")
-
-    token = auth_header.split(' ')[1]
-
-    # Inicializar servicios
-    redis_manager = RedisManager()
-    database = Database()
-
-    try:
-        # Verificar el token en Redis
-        user_data = await redis_manager.get_value(f"auth_token:{token}")
-
-        if not user_data:
-            # Si no está en Redis, buscar en base de datos
-            # Implementa tu lógica de verificación de token
-            # Por ejemplo, buscar en una tabla de tokens de usuario
-            user_data = await database.verify_auth_token(token)
-
-        if not user_data:
-            raise HTTPException(status_code=401, detail="Token inválido")
-
-        return user_data
-
-    except Exception as e:
-        raise HTTPException(status_code=401, detail="Error de autenticación")

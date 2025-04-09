@@ -86,9 +86,9 @@ async def trigger_home_assistant(
 
     Ejemplo de body:
     {
-        "user_id": 1,
-        "phone": "543471627777",
-        "method": "get_alarm_status",
+        "user_id": 1111,
+        "phone": "1111111",
+        "method": "estado_alarma",
         "params": {}
     }
     """
