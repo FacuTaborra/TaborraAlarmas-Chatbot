@@ -36,6 +36,10 @@ Las posibles intenciones son:
 - saludo: Si está saludando
 - despedida: Si se está despidiendo
 - problema_alarma: Si indica que tiene un problema con su alarma, o tiene una pregunta frecuente de la alarma (como anular una zona, preguntas sobre su alarma, etc)
+- agradecimiento: Cuando el cliente agradece por la atención recibida.
+
+
+IMPORTANTE: NO clasifiques mensajes cortos y simples como "si", "no", "ok", o números sueltos. Estos NO deben tener ninguna intención asignada.
 
 Mensaje del usuario: {text}
 

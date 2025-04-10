@@ -8,6 +8,7 @@ from src.core.memory import RedisManager
 from src.core.database import Database
 from src.tools.home_assistant import HomeAssistantTools
 from src.config import settings
+import time
 
 
 class HomeAssistantController:
@@ -96,7 +97,6 @@ class HomeAssistantController:
 
         # Crear instancia de herramienta de Home Assistant
         url = f"{ha_config["webhook_url"]}/api/webhook/activar_{method}"
-        print(f"🔗 Llamando al webhook de Home Assistant: {url}")
         ha_tools = HomeAssistantTools(
             webhook_url=url,
             token=ha_config["token"]
@@ -104,8 +104,6 @@ class HomeAssistantController:
 
         # Añadir el token temporal y URL de callback a los parámetros
         url = f"{settings.URL_SERVIDOR}/webhook/home_assistant_response"
-        print(
-            f"🔗 URL de callback: {url}, callback_token: {callback_token}, conversation: {conversation_id}")
         callback_params = {
             "callback_token": callback_token,
             "conversation_id": conversation_id,
@@ -136,7 +134,6 @@ class HomeAssistantController:
             Estado del procesamiento
         """
         try:
-            print(f"📥 Respuesta de Home Assistant recibida: {data}")
 
             phone = data.get("phone")
 
@@ -151,9 +148,9 @@ class HomeAssistantController:
             if "images_url" in data:
                 for image_url in data["images_url"]:
                     # Enviar imágenes
-                    await self.whatsapp_service.send_image(phone, image_url)
+                    await self.whatsapp_service.send_image(phone, f"{image_url}?t={int(time.time())}")
                     # Actualizar historial
-                    await self._update_conversation_history(phone, image_url)
+                    await self._update_conversation_history(phone, f"{image_url}?t={int(time.time())}")
 
             if "video_url" in data:
                 # Enviar video, falta implementar

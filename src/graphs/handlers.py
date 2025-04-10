@@ -58,7 +58,8 @@ def handle_general_inquiry(state: Dict[str, Any]) -> Dict[str, Any]:
         "whatsapp_cobranza": f"📞 WhatsApp de cobranza: {business_info.get('whatsapp_cobranza', 'No disponible')}",
         "security": f"🚨 Teléfono de Security 24: {business_info.get('security', 'No disponible')}",
         "saludo": "👋 ¡Hola! Soy el asistente virtual de Taborra Alarmas SRL. ¿En qué puedo ayudarte hoy?",
-        "despedida": "👋 ¡Gracias por contactar a Taborra Alarmas SRL! Estamos para ayudarte cuando lo necesites."
+        "despedida": "👋 ¡Gracias por contactar a Taborra Alarmas SRL! Estamos para ayudarte cuando lo necesites.",
+        "agradecimiento": "🙏 De nada! Aqui estoy para lo que necesites de nuestros servicios! No dudes en preguntar si necesitas otra cosa."
     }
 
     # Si hay una intención específica detectada, usar respuesta predefinida

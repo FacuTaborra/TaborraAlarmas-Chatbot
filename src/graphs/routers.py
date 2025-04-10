@@ -17,10 +17,14 @@ def route_main_conversation(state: Dict[str, Any]) -> str:
         Nombre del nodo al que dirigir el flujo
     """
     # Intenciones generales de información para cualquier nivel
+
+    if state.get("troubleshooting_active", False):
+        return "TROUBLESHOOTING"
+
     general_intents = ["direccion", "horario", "email", "telefono1", "telefono2", "telefono3", "whatsapp",
                        "whatsapp_servicio_tecnico", "whatsapp_ventas",
                        "whatsapp_administracion", "whatsapp_cobranza",
-                       "security", "saludo", "despedida"]
+                       "security", "saludo", "despedida", "agradecimiento"]
 
     intents = state["intents"]
     user_level = state["user_level"]
@@ -28,10 +32,6 @@ def route_main_conversation(state: Dict[str, Any]) -> str:
     # Intenciones de información general
     if any(intent in intents for intent in general_intents):
         return "GENERAL_INQUIRY"
-
-    # Si hay un estado de troubleshooting activo, continuar con él
-    if state.get("troubleshooting_active", False):
-        return "TROUBLESHOOTING"
 
     # Intención de problema de alarma para nivel 2+
     if "problema_alarma" in intents and user_level >= 2:

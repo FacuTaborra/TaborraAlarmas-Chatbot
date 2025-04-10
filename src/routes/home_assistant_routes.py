@@ -40,7 +40,7 @@ async def process_home_assistant_response(
     """
     try:
         data = await request.json()
-        print(f"📥 Recibiendo respuesta de Home Assistant: {data}")
+        print(f"📥📥📥 Recibiendo respuesta de Home Assistant: {data}")
 
         # Verificar datos básicos necesarios
         callback_token = data.get('callback_token')

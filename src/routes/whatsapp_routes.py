@@ -39,7 +39,6 @@ async def process_whatsapp_message(request: Request):
 
         # Obtener payload
         data = await request.json()
-        print(f"📥 Nuevo mensaje recibido: {data}")
 
         # Procesar mensaje
         response = await whatsapp_controller.process_message(data)

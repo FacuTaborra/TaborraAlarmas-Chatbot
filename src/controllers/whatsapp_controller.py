@@ -142,7 +142,8 @@ class WhatsAppController:
         }
 
         # Verifica si hay un estado de troubleshooting activo
-        troubleshooting_state = await self.redis_manager.get_value(f"taborra:chat:{phone_user}:{chat_id}:state")
+        # Verifica si hay un estado de troubleshooting activo
+        troubleshooting_state = await self.redis_manager.get_value(f"taborra:user:{user_data.get('id')}:chat:{chat_id}:state")
         if troubleshooting_state:
             # Recuperar el estado y convertir los mensajes
             troubleshooting_state = self._recover_state_from_storage(
@@ -267,7 +268,6 @@ class WhatsAppController:
                     await self.database.save_conversation_message(
                         conversation_id,
                         "user",
-                        # El último mensaje de usuario
                         final_messages[-2].content
                     )
 
@@ -302,7 +302,6 @@ class WhatsAppController:
             # Primero enviar el mensaje con las opciones
             await self.whatsapp_service.send_message(user_data.get("phone"), response_message.content)
 
-            # Luego enviar cada imagen de teclado
             # Luego enviar cada imagen de teclado
             for i, (key, keyboard) in enumerate(KEYBOARD_TYPES.items(), 1):
                 caption = f"Digite el número {i} para seleccionar el teclado {keyboard['name']}"
@@ -378,15 +377,14 @@ class WhatsAppController:
             serializable_state = self._prepare_state_for_storage(
                 result["troubleshooting_state"])
             await self.redis_manager.set_value(
-                f"taborra:chat:{user_data.get("phone")}:{chat_id}:state",
+                f"taborra:user:{user_data.get('id')}:chat:{chat_id}:state",
                 serializable_state,
                 1800  # 30 minutos
             )
         else:
             # Si estaba activo pero ya no, eliminarlo
-            await self.redis_manager.delete_key(f"taborra:chat:{user_data.get("phone")}:{chat_id}:state")
-
-        return {"status": "Mensaje procesado y respuesta enviada"}
+            await self.redis_manager.delete_key(f"taborra:user:{user_data.get('id')}:chat:{chat_id}:state")
+            return {"status": "Mensaje procesado y respuesta enviada"}
 
     def _prepare_state_for_storage(self, state):
         """Prepara el estado para almacenamiento en Redis convirtiendo objetos no serializables"""

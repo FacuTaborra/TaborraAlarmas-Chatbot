@@ -66,7 +66,6 @@ class IntentClassifier:
             Lista de intenciones detectadas
         """
         try:
-            # Invocar el modelo
             response = await self.chain.ainvoke({"text": text})
 
             # Procesar la respuesta
