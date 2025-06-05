@@ -115,7 +115,7 @@ class WhatsAppController:
 
         # Obtener historial de mensajes
         chat_id = await self.redis_manager.get_or_create_chat_id(phone_user)
-        history = await self.redis_manager.get_message_history(f"chat:{phone_user}")
+        history = await self.redis_manager.get_message_history(chat_id)
 
         # Crear lista de mensajes para LangChain
         messages_history = self._convert_history_to_messages(history)
@@ -280,12 +280,12 @@ class WhatsAppController:
 
         # Guardar en historial de mensajes (Redis - temporal)
         await self.redis_manager.add_message_to_history(
-            f"chat:{user_data.get('phone')}",
+            chat_id,
             "user",
             final_messages[-2].content if len(final_messages) >= 2 else ""
         )
         await self.redis_manager.add_message_to_history(
-            f"chat:{user_data.get('phone')}",
+            chat_id,
             "assistant",
             response_message.content
         )

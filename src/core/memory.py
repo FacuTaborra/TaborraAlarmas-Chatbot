@@ -166,6 +166,7 @@ class RedisManager:
         key = f"taborra:chat:{chat_id}:messages"
         try:
             messages = await self.redis_client.lrange(key, 0, limit - 1)
+            messages = list(reversed(messages))
             return [json.loads(msg) for msg in messages if msg]
         except Exception as e:
             print(f"❌ Error al obtener historial de mensajes: {e}")

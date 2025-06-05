@@ -6,6 +6,7 @@ import uuid
 from typing import Dict, Any
 
 from langchain_core.messages import AIMessage, HumanMessage
+from src.chains import ConversationalAI
 
 from src.graphs.troubleshooting import (
     confirmation_step,
@@ -20,9 +21,10 @@ from src.tools.home_assistant import HomeAssistantTools
 from src.core.database import Database
 from src.core.memory import RedisManager
 
-# Inicializar servicios
+# Inicializar servicios y modelo generativo
 db = Database()
 redis = RedisManager()
+chat_ai = ConversationalAI()
 
 
 def detect_intents(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -41,40 +43,11 @@ def detect_intents(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def handle_general_inquiry(state: Dict[str, Any]) -> Dict[str, Any]:
     messages = state["messages"]
-    intents = state["intents"]
     business_info = state["business_info"]
 
-    # Mapeo de intenciones a respuestas predefinidas
-    intent_responses = {
-        "direccion": f"🏢 Nuestra dirección es: {business_info.get('direccion', 'No disponible')}",
-        "horario": f"🕒 Nuestro horario de atención es: {business_info.get('horario', 'No disponible')}",
-        "email": f"📧 Puedes contactarnos por email a: {business_info.get('email', 'No disponible')}",
-        "telefono1": f"📞 Nuestro teléfono principal es: {business_info.get('telefono_1', 'No disponible')}",
-        "telefono2": f"📞 Teléfono alternativo: {business_info.get('telefono_2', 'No disponible')}",
-        "telefono3": f"📞 Otro teléfono: {business_info.get('telefono_3', 'No disponible')}",
-        "whatsapp_servicio_tecnico": f"🔧 WhatsApp del servicio técnico: {business_info.get('whatsapp_servicio_tecnico', 'No disponible')}",
-        "whatsapp_ventas": f"📞 WhatsApp de ventas: {business_info.get('whatsapp_ventas', 'No disponible')}",
-        "whatsapp_administracion": f"📞 WhatsApp de administración: {business_info.get('whatsapp_administracion', 'No disponible')}",
-        "whatsapp_cobranza": f"📞 WhatsApp de cobranza: {business_info.get('whatsapp_cobranza', 'No disponible')}",
-        "security": f"🚨 Teléfono de Security 24: {business_info.get('security', 'No disponible')}",
-        "saludo": "👋 ¡Hola! Soy el asistente virtual de Taborra Alarmas SRL. ¿En qué puedo ayudarte hoy?",
-        "despedida": "👋 ¡Gracias por contactar a Taborra Alarmas SRL! Estamos para ayudarte cuando lo necesites.",
-        "agradecimiento": "🙏 De nada! Aqui estoy para lo que necesites de nuestros servicios! No dudes en preguntar si necesitas otra cosa."
-    }
-
-    # Si hay una intención específica detectada, usar respuesta predefinida
-    detected_intents = [i for i in intents if i in intent_responses]
-
-    if detected_intents:
-        # Si hay múltiples intenciones, combinar las respuestas
-        if len(detected_intents) > 1:
-            response = "\n\n".join([intent_responses[intent]
-                                   for intent in detected_intents])
-        else:
-            response = intent_responses[detected_intents[0]]
-
-        messages.append(AIMessage(content=response))
-        return {**state, "messages": messages}
+    response = chat_ai.generate(messages, business_info)
+    messages.append(AIMessage(content=response))
+    return {**state, "messages": messages}
 
 
 def start_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -226,18 +199,10 @@ def process_troubleshooting(state: Dict[str, Any]) -> Dict[str, Any]:
 def handle_general_response(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Nodo para responder cuando no se detectan intenciones
-
-    Args:
-        state: Estado actual de la conversación
-
-    Returns:
-        Estado con la respuesta generica
     """
     messages = state["messages"]
-    # Ejecutar la cadena
-    response = "No he podido entender tu consulta. ¿Puedes especificar qué información necesitas sobre nuestros servicios?"
-
-    # Añadir respuesta al historial
+    business_info = state["business_info"]
+    response = chat_ai.generate(messages, business_info)
     messages.append(AIMessage(content=response))
 
     return {**state, "messages": messages}
